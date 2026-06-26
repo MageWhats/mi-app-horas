@@ -135,24 +135,52 @@ export const calculateMonthlySummary = (entries: DayEntry[]): MonthlySummary => 
   };
 };
 
+// lib/utils.ts (Sección Final)
+
+/**
+ * Convierte el listado de días registrados en un archivo de texto CSV compatible con Microsoft Excel.
+ * Estructura alineada al contrato de 7.5h diarias y cálculo nocturno automático.
+ */
 export const convertEntriesToCSV = (entries: DayEntry[], yearMonthLabel: string): string => {
-  const headers = ['Fecha', 'Entrada', 'Salida', 'Horas Reales', 'Horas Nocturnas Auto', '¿Festivo/Domingo?', 'Horas Extras Diarias', 'Notas'];
+  // 1. Definimos los encabezados de las columnas en español y mayúsculas para Excel
+  const headers = [
+    'FECHA', 
+    'HORA ENTRADA', 
+    'HORA SALIDA', 
+    'HORAS REALES', 
+    'HORAS NOCTURNAS', 
+    'HORAS EXTRAS (T. 7.5h)', 
+    '¿FESTIVO / DOMINGO?', 
+    'NOTAS / NOVEDADES'
+  ];
   
+  // 2. Mapeamos cada uno de los días guardados por el usuario
   const rows = entries.map((entry) => {
+    // Calculamos el exceso exacto sobre las 7.5h diarias para la columna de extras
     const extraDiaria = entry.hours > 7.5 ? entry.hours - 7.5 : 0;
-    const cleanNotes = entry.notes ? entry.notes.replace(/,/g, ';').replace(/\n/g, ' ') : '';
+    
+    // Limpiamos los saltos de línea o comas en las notas para no romper las celdas de Excel
+    const cleanNotes = entry.notes 
+      ? entry.notes.replace(/,/g, ';').replace(/\n/g, ' ') 
+      : 'Sin novedades';
     
     return [
       entry.date,
       entry.startTime,
       entry.endTime,
-      entry.hours,
-      entry.nightHours,
-      entry.isHolidayOrSunday ? 'SI' : 'NO',
-      extraDiaria.toFixed(2),
+      `${entry.hours}h`,
+      `${entry.nightHours}h`,
+      `${extraDiaria.toFixed(1)}h`,
+      entry.isHolidayOrSunday ? 'SÍ' : 'NO',
       `"${cleanNotes}"`
-    ].join(',');
+    ].join(','); // Separa cada celda por una coma estándar
   });
 
-  return [`Reporte Laboral - ${yearMonthLabel}`, headers.join(','), ...rows].join('\n');
+  // 3. Unimos el título del reporte, los encabezados y todas las filas con saltos de línea
+  return [
+    `REPORTE MENSUAL DE HORAS TRABAJADAS - ${yearMonthLabel.toUpperCase()}`,
+    '', // Fila vacía de separación estética
+    headers.join(','),
+    ...rows
+  ].join('\n');
 };

@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import { Ionicons } from '@expo/vector-icons';
+import { TabBarIcon } from '@/components/TabBarIcon';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from 'react-native';
 import { HoursInputModal } from '../../components/HoursInputModal';
@@ -7,6 +7,7 @@ import { MonthNavigator } from '../../components/MonthNavigator';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { useWorkHours } from '../../context/WorkHoursContext';
 import { DayEntry } from '../../types/hours';
+
 
 export default function RegisterScreen() {
   const { entries, currentDate, loading } = useWorkHours();
@@ -119,7 +120,7 @@ export default function RegisterScreen() {
                       ) : null}
                     </View>
                   ) : null}
-                  <Ionicons name="chevron-forward" size={16} color="#3a4f7c" />
+                  <TabBarIcon name="chevron-forward" size={16} color="#3a4f7c" />
                 </View>
               </TouchableOpacity>
             );

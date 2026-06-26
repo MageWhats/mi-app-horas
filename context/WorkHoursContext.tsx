@@ -1,11 +1,10 @@
 // context/WorkHoursContext.tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
-import { calculateMonthlySummary, convertEntriesToCSV } from '../lib/utils';
+import { Platform } from 'react-native';
+import { calculateMonthlySummary } from '../lib/utils';
 import { DayEntry, MonthlySummary } from '../types/hours';
+
 
 interface WorkHoursContextType {
   entries: Record<string, DayEntry>;    // Diccionario del mes activo { "YYYY-MM-DD": DayEntry }
@@ -116,46 +115,58 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
 
-  // 6. EXPORTACIÓN NATIVA A EXCEL (CSV)
+  // 6. EXPORTACIÓN DE HOJA EXCEL REAL CON DOS PESTAÑAS (DETALLE + RESUMEN ESPIEJO)
   const exportCurrentMonthToCSV = async () => {
-    const entriesArray = Object.values(entries);
-    if (entriesArray.length === 0) {
-      Alert.alert("Sin registros", "No tienes datos guardados en este mes para exportar.");
-      return;
-    }
+    const XLSX = require('xlsx'); // Importación en caliente para entorno web
+    
+    const monthsLabels = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const currentMonthLabel = monthsLabels[currentDate.getMonth()];
+    const labelLabel = `${currentMonthLabel} ${currentDate.getFullYear()}`;
+    const filename = `Reporte_Horas_${currentDate.getFullYear()}_${currentDate.getMonth() + 1}.xlsx`;
 
-    // Ordena los registros por fecha antes de compilar el CSV
-    const sortedEntries = entriesArray.sort((a, b) => a.date.localeCompare(b.date));
-    const label = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-    const csvContent = convertEntriesToCSV(sortedEntries, label);
+    // --- HOJA 1: DETALLE DIARIO ---
+    const detailRows = Object.values(entries).map((entry) => {
+      const extraDiaria = entry.hours > 7.5 ? entry.hours - 7.5 : 0;
+      return {
+        'FECHA': entry.date,
+        'HORA ENTRADA': entry.startTime,
+        'HORA SALIDA': entry.endTime,
+        'HORAS REALES': `${entry.hours}h`,
+        'HORAS NOCTURNAS': `${entry.nightHours}h`,
+        'HORAS EXTRAS (T. 7.5h)': `${extraDiaria.toFixed(1)}h`,
+        '¿FESTIVO / DOMINGO?': entry.isHolidayOrSunday ? 'SÍ' : 'NO',
+        'NOTAS / NOVEDADES': entry.notes || 'Sin novedades'
+      };
+    });
 
-    try {
-      const filename = `Reporte_Horas_${label}.csv`;
-      const fileUri = String(FileSystem.documentDirectory) + filename;
+    const workbook = XLSX.utils.book_new();
+    const detailSheet = XLSX.utils.json_to_sheet(detailRows);
+    detailSheet['!cols'] = [{ wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 35 }];
+    XLSX.utils.book_append_sheet(workbook, detailSheet, "Detalle Diario");
 
+    // --- HOJA 2: RESUMEN MENSUAL (REFLEJO DE LAS 6 TARJETAS) ---
+    const summaryData = [
+      { 'MÉTRICA LABORAL': 'Horas Reales Totales', 'VALOR': `${summary.totalHours}h`, 'DESCRIPCIÓN': 'Tiempo neto acumulado trabajado en el mes' },
+      { 'MÉTRICA LABORAL': 'Horas con Recargo', 'VALOR': `${summary.totalHoursWithRecargo}h`, 'DESCRIPCIÓN': 'Total de horas físicas laboradas en Domingos / Festivos' },
+      { 'MÉTRICA LABORAL': 'Días Activos', 'VALOR': summary.workedDays, 'DESCRIPCIÓN': 'Cantidad de jornadas registradas en este período' },
+      { 'MÉTRICA LABORAL': 'Promedio Diario', 'VALOR': `${summary.averageHoursPerDay}h`, 'DESCRIPCIÓN': 'Media de tiempo laborado por jornada' },
+      { 'MÉTRICA LABORAL': 'Recargo Nocturno', 'VALOR': `${summary.totalRecargoNocturno}h`, 'DESCRIPCIÓN': 'Total de horas físicas laboradas en horario nocturno' },
+      { 'MÉTRICA LABORAL': 'Horas Extras Acumuladas', 'VALOR': `${summary.totalHorasExtras}h`, 'DESCRIPCIÓN': 'Suma de excesos diarios superiores a las 7.5h base' },
+      { 'MÉTRICA LABORAL': 'Límite Semanal Legal', 'VALOR': `${summary.weeklyLimit}h`, 'DESCRIPCIÓN': 'Tope máximo ordinario semanal según Ley de Colombia' }
+    ];
 
+    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+    summarySheet['!cols'] = [{ wch: 26 }, { wch: 12 }, { wch: 45 }]; // Ancho óptimo para las columnas del resumen
+    XLSX.utils.book_append_sheet(workbook, summarySheet, `Resumen ${currentMonthLabel}`);
 
-      
-      // Escribe el archivo temporal en el sistema de archivos del celular
-      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-        encoding: FileSystem.EncodingType.UTF8
-      });
-
-      // Abre el menú nativo para compartir (WhatsApp, Correo, Guardar en Archivos)
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: `Exportar horas de ${label}`,
-          UTI: 'public.comma-separated-values-text'
-        });
-      } else {
-        Alert.alert("Error", "La función de compartir no está disponible en este dispositivo.");
-      }
-    } catch (error) {
-      console.error("Error exportando CSV:", error);
-      Alert.alert("Error", "Ocurrió un fallo al intentar generar el archivo.");
+    // 3. Generamos el archivo binario descargable y lo disparamos en el navegador
+    if (Platform.OS === 'web') {
+      XLSX.writeFile(workbook, filename);
     }
   };
+
+
+
 
   return (
     <WorkHoursContext.Provider value={{

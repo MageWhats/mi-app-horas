@@ -28,13 +28,16 @@ const SVG_ICONS: Record<string, string> = {
 
 export function TabBarIcon({ name, size = 24, color }: TabBarIconProps) {
   if (Platform.OS === 'web') {
-    const pathData = SVG_ICONS[name] || SVG_ICONS['calendar'];
+    // NUEVO: Le quitamos el '-outline' al nombre si es que viene con él
+    const cleanName = name.replace('-outline', '');
+    const pathData = SVG_ICONS[cleanName] || SVG_ICONS['calendar'];
     return (
       <Svg height={size} width={size} viewBox="0 0 24 24">
         <Path d={pathData} fill={color} />
       </Svg>
     );
   }
+
 
   return <Ionicons name={name as any} size={size} color={color} />;
 }
