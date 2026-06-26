@@ -1,4 +1,5 @@
 // components/HoursInputModal.tsx
+import * as Location from 'expo-location'; // IMPORTACIÓN DEL GPS OFICIAL DE EXPO
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useWorkHours } from '../context/WorkHoursContext';
@@ -19,7 +20,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
   const [endTime, setEndTime] = useState('17:00');
   const [isHoliday, setIsHoliday] = useState(false);
   const [notes, setNotes] = useState('');
-  const [gpsLoading, setGpsLoading] = useState(false); // Estado para mostrar carga de GPS
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen && dateStr) {
@@ -39,37 +40,37 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
     }
   }, [isOpen, dateStr, entries]);
 
-  // Función interna para solicitar coordenadas al navegador o celular de forma nativa
-  const captureCurrentLocation = (): Promise<any> => {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        console.log("Geolocalización no soportada por el navegador.");
-        resolve(null);
-        return;
+  // Nueva función basada en la API de Expo, infalible en celulares y web
+  const captureCurrentLocation = async () => {
+    try {
+      // 1. Solicita permisos de ubicación en caliente al dispositivo
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permiso de ubicación denegado por el usuario.');
+        return null;
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: position.timestamp
-          });
-        },
-        (error) => {
-          console.log("Error o rechazo de permisos de GPS:", error.message);
-          resolve(null); // Retorna nulo pero no rompe el flujo de guardado
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 } // Configuración de alta precisión
-      );
-    });
+      // 2. Extrae las coordenadas satelitales al instante
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      return {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        timestamp: position.timestamp
+      };
+    } catch (error) {
+      console.log("Error consultando el GPS nativo:", error);
+      return null;
+    }
   };
 
   const handleSave = async () => {
     setGpsLoading(true);
     
-    // Captura la ubicación en caliente justo al presionar el botón
+    // Dispara el capturador satelital de Expo
     const coords = await captureCurrentLocation();
 
     await saveDayEntry({
@@ -78,7 +79,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
       endTime,
       isHolidayOrSunday: isHoliday,
       notes: notes.trim() ? notes : undefined,
-      location: coords || undefined // Inyectamos el objeto de ubicación si se capturó con éxito
+      location: coords || undefined
     } as any);
 
     setGpsLoading(false);
@@ -174,10 +175,9 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               />
             </View>
 
-            {/* Muestra un pequeño indicador de texto si se está cargando la ubicación */}
             {gpsLoading && (
               <Text style={{ color: '#00b4d8', fontSize: 12, textAlign: 'center', marginBottom: 12, fontWeight: '500' }}>
-                Consultando satélites GPS de forma segura...
+                Sincronizando coordenadas con Firebase...
               </Text>
             )}
 
@@ -201,9 +201,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                 {gpsLoading ? (
                   <ActivityIndicator color="#00b4d8" />
                 ) : (
-                  <>
-                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>Guardar Jornada</Text>
-                  </>
+                  <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>Guardar Jornada</Text>
                 )}
               </TouchableOpacity>
             </View>

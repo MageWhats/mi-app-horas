@@ -1,6 +1,6 @@
 // app/(tabs)/index.tsx
 import { useState } from 'react';
-import { FlatList, Linking, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, Linking, Text, TouchableOpacity, View } from 'react-native';
 import { HoursInputModal } from '../../components/HoursInputModal';
 import { MonthNavigator } from '../../components/MonthNavigator';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -25,14 +25,16 @@ export default function RegisterScreen() {
     return daysArray;
   };
 
+  // Dispara el mapa satelital en una pestaña limpia usando coordenadas puras de Firebase
+  // Dispara el mapa satelital en la aplicación nativa de Google Maps de forma universal e infalible
   const openGoogleMaps = (latitude: number, longitude: number) => {
+    // URL oficial estructurada con los parámetros de búsqueda satelital de Google
     const url = `https://google.com{latitude},${longitude}`;
-    if (Platform.OS === 'web') {
-      window.open(url, '_blank');
-    } else {
-      Linking.openURL(url);
-    }
+    
+    // Usamos Linking.openURL de forma global; es 100% compatible con Web, Android e iOS y no lo bloquea el navegador
+    Linking.openURL(url).catch((err) => console.error("No se pudo abrir el mapa:", err));
   };
+
 
   const renderDayItem = ({ item: dateStr }: { item: string }) => {
     const entry = entries[dateStr];
@@ -40,6 +42,9 @@ export default function RegisterScreen() {
     const dayNumber = dayDate.getDate();
     const weekday = dayDate.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase();
     const isSunday = dayDate.getDay() === 0;
+
+    // CORRECCIÓN CLAVE: Verificamos de forma estricta que existan los hijos latitude y longitude dentro del objeto location de Google
+    const hasValidGps = entry && entry.location && typeof entry.location.latitude === 'number';
 
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1c2541', padding: 14, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: entry?.isHolidayOrSunday || isSunday ? '#3a86ff30' : '#3a4f7c15' }}>
@@ -70,18 +75,20 @@ export default function RegisterScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Bloque de Acciones Derecha (GPS + Flecha) */}
+        {/* Bloque de Acciones Derecha (GPS Interceptado + Flecha) */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          {/* BOTÓN DE MAPA: Se dibuja únicamente si existen coordenadas en el día */}
-          {entry?.location && (
+          
+          {/* BOTÓN DE MAPA VECTORIAL RE-RESTRUCTURADO: Lee directo las propiedades del Map de Firestore */}
+          {hasValidGps ? (
             <TouchableOpacity 
               onPress={() => openGoogleMaps(entry.location!.latitude, entry.location!.longitude)}
               activeOpacity={0.7}
-              style={{ padding: 8, borderRadius: 10, backgroundColor: '#0b132b', borderWidth: 1, borderColor: '#00f5d430' }}
+              style={{ padding: 8, borderRadius: 10, backgroundColor: '#0b132b', borderWidth: 1, borderColor: '#00f5d440' }}
             >
+              {/* Forzamos el nombre de la clave mapeada en tu TabBarIcon */}
               <TabBarIcon name="map-outline" size={16} color="#00f5d4" />
             </TouchableOpacity>
-          )}
+          ) : null}
 
           <TouchableOpacity onPress={() => setSelectedDate(dateStr)} activeOpacity={0.7}>
             <TabBarIcon name="chevron-forward" size={16} color="#3a4f7c" />

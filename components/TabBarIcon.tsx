@@ -1,4 +1,4 @@
-// components/navigation/TabBarIcon.tsx
+// components/TabBarIcon.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -24,12 +24,15 @@ const SVG_ICONS: Record<string, string> = {
   'trending-up-outline': 'M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6h-6z',
   'information-circle-outline': 'M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z',
   // NUEVO VECTOR DE MAPA
-  'map-outline': 'M15 5l-6-3-6 3v14l6-3 6 3 6-3V5l-6 3zm-1 11.7l-4-2V3.8l4 2v10.9z'
+  // CORRECCIÓN: Dejar la clave como 'map' para que el limpiador la encuentre
+  'map': 'M15 5l-6-3-6 3v14l6-3 6 3 6-3V5l-6 3zm-1 11.7l-4-2V3.8l4 2v10.9z'
+
 };
 
 export function TabBarIcon({ name, size = 24, color }: TabBarIconProps) {
   if (Platform.OS === 'web') {
-    const cleanName = name.replace('-outline', '');
+    // Limpia de forma estricta tanto '-outline' como '-sharp' para encontrar la clave exacta (ej: 'map-outline' se vuelve 'map')
+    const cleanName = name.replace('-outline', '').replace('-sharp', '').trim();
     const pathData = SVG_ICONS[cleanName] || SVG_ICONS['calendar'];
     return (
       <Svg height={size} width={size} viewBox="0 0 24 24">
