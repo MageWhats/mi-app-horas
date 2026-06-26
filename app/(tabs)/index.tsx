@@ -1,11 +1,12 @@
 // app/(tabs)/index.tsx
 import { useState } from 'react';
-import { FlatList, Linking, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, Linking, Platform, Text, TouchableOpacity, View } from 'react-native';
 import { HoursInputModal } from '../../components/HoursInputModal';
 import { MonthNavigator } from '../../components/MonthNavigator';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { TabBarIcon } from '../../components/TabBarIcon';
 import { useWorkHours } from '../../context/WorkHoursContext';
+
 
 export default function RegisterScreen() {
   const { entries, currentDate } = useWorkHours();
@@ -78,17 +79,36 @@ export default function RegisterScreen() {
         {/* Bloque de Acciones Derecha (GPS Interceptado + Flecha) */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           
-          {/* BOTÓN DE MAPA VECTORIAL RE-RESTRUCTURADO: Lee directo las propiedades del Map de Firestore */}
+                   {/* BOTÓN DE MAPA DEFINITIVO: Redirección de sistema directa inmune a bloqueos web */}
           {hasValidGps ? (
             <TouchableOpacity 
-              onPress={() => openGoogleMaps(entry.location!.latitude, entry.location!.longitude)}
+              onPress={() => {
+                const url = `https://google.com{entry.location!.latitude},${entry.location!.longitude}`;
+                if (Platform.OS === 'web') {
+                  // Sobreescribe la barra del navegador directamente en caliente (Evita el about:blank)
+                  window.location.href = url;
+                } else {
+                  // Comportamiento normal en celular nativo (APK)
+                  openGoogleMaps(entry.location!.latitude, entry.location!.longitude);
+                }
+              }}
               activeOpacity={0.7}
-              style={{ padding: 8, borderRadius: 10, backgroundColor: '#0b132b', borderWidth: 1, borderColor: '#00f5d440' }}
+              style={{ 
+                padding: 8, 
+                borderRadius: 10, 
+                backgroundColor: '#0b132b', 
+                borderWidth: 1, 
+                borderColor: 'rgba(0, 245, 212, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             >
-              {/* Forzamos el nombre de la clave mapeada en tu TabBarIcon */}
               <TabBarIcon name="map-outline" size={16} color="#00f5d4" />
             </TouchableOpacity>
           ) : null}
+
+
 
           <TouchableOpacity onPress={() => setSelectedDate(dateStr)} activeOpacity={0.7}>
             <TabBarIcon name="chevron-forward" size={16} color="#3a4f7c" />
