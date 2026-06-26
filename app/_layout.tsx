@@ -1,3 +1,5 @@
+// app/_layout.tsx
+import { Ionicons } from '@expo/vector-icons'; // Importación añadida para los iconos web
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -8,7 +10,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 
 export {
   // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
+  ErrorBoundary
 } from 'expo-router';
 
 export const unstable_settings = {
@@ -22,6 +24,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    ...Ionicons.font, // Inyección de fuentes para que carguen en el navegador web
   });
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
