@@ -7,7 +7,14 @@ export interface DayEntry {
   hours: number;              // Total de horas reales calculadas en el día
   nightHours: number;         // Campo numérico dedicado para horas de la noche
   isHolidayOrSunday: boolean; // Identifica si aplica el recargo dominical/festivo
-  notes?: string;             // Anotaciones opcionales
+  notes?: string;   
+  
+  location?:{
+    latitude: number;
+    longitude: number;
+    timestamp: number;// Anotaciones opcionales
+    accuracy: number; 
+  };
 }
 
 export interface MonthlySummary {
