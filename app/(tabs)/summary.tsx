@@ -1,9 +1,10 @@
 // app/(tabs)/summary.tsx
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Stack } from 'expo-router'; // ¡NUEVO!: Control de cabeceras nativas
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MonthNavigator } from '../../components/MonthNavigator';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { SummaryCard } from '../../components/SummaryCard';
-import { TabBarIcon } from '../../components/TabBarIcon'; // Cambiado aquí
+import { TabBarIcon } from '../../components/TabBarIcon';
 import { WeeklyBarChart } from '../../components/WeeklyBarChart';
 import { useWorkHours } from '../../context/WorkHoursContext';
 
@@ -22,6 +23,19 @@ export default function SummaryScreen() {
 
   return (
     <ScreenContainer>
+      {/* 1. CONFIGURACIÓN COMPACTA: Oculta la cabecera blanca por defecto en cualquier celular o web */}
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* 2. TÍTULO INTEGRADO DIRECTAMENTE EN EL AZUL DE TU MAR PROFUNDO */}
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>Resumen</Text>
+        
+        {/* Botón de configuración minimalista unificado */}
+        <TouchableOpacity activeOpacity={0.7} style={styles.settingsButton}>
+          <TabBarIcon name="close" size={16} color="#ffffff" />
+        </TouchableOpacity>
+      </View>
+
       <MonthNavigator />
 
       {loading ? (
@@ -44,7 +58,8 @@ export default function SummaryScreen() {
               marginBottom: 16,
               gap: 8,
               borderWidth: 1,
-              borderColor: '#15803d'
+              borderColor: '#15803d',
+              marginTop: 4 // Pequeño ajuste para despegarlo del navegador
             }}
           >
             <TabBarIcon name="calendar" size={20} color="#ffffff" />
@@ -88,3 +103,28 @@ export default function SummaryScreen() {
     </ScreenContainer>
   );
 }
+
+// Estilos de cabecera limpia integrados abajo
+const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 4,
+    paddingBottom: 4,
+    backgroundColor: '#0b132b',
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: -0.5,
+  },
+  settingsButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#1c2541',
+    borderWidth: 1,
+    borderColor: '#3a4f7c30',
+  }
+});

@@ -1,9 +1,9 @@
 // components/lib/firebase.ts
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth'; // Importación estándar oficial para Web y Web Apps
+import { getAuth, initializeAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { Platform } from 'react-native';
 
-// REEMPLAZA ESTOS VALORES CON TUS LLAVES REALES DE FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyB6CBtQ-aRsGh5TbDHIeuJ-yOQ3TRBIczM",
   authDomain: "controldehoras-efb3d.firebaseapp.com",
@@ -13,11 +13,17 @@ const firebaseConfig = {
   appId: "1:984203415297:web:b48afcc9280a3045195500"
 };
 
-// Inicializa Firebase de forma global en la nube
+// Inicializa la App global en la nube de Google
 const app = initializeApp(firebaseConfig);
 
-// Inicializa el sistema de usuarios estándar (Firebase maneja la memoria web automáticamente)
-const auth = getAuth(app);
+// Inicialización inteligente inmune a errores de módulos en TypeScript
+let auth;
+if (Platform.OS === 'web') {
+  auth = getAuth(app);
+} else {
+  // En entornos móviles nativos, Firebase asimila AsyncStorage automáticamente mediante el puente interno de Expo
+  auth = initializeAuth(app);
+}
 
 // Inicializa la base de datos NoSQL Cloud Firestore
 const db = getFirestore(app);

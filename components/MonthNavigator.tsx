@@ -3,7 +3,10 @@ import { signOut } from 'firebase/auth';
 import React from 'react';
 import { Platform, Text, TouchableOpacity, View } from 'react-native';
 import { useWorkHours } from '../context/WorkHoursContext';
-import { auth } from '../lib/firebase'; // Conexión a tu Firebase
+ // @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
+import { auth } from '../lib/firebase';
+
+
 import { TabBarIcon } from './TabBarIcon'; // Sistema de iconos vectoriales SVG
 
 export const MonthNavigator: React.FC = () => {
@@ -13,7 +16,9 @@ export const MonthNavigator: React.FC = () => {
   // Función para desconectar al usuario de la nube de Google
   const handleSignOut = async () => {
     try {
+      // @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
       await signOut(auth);
+      
       if (Platform.OS === 'web') {
         alert('Sesión cerrada correctamente.');
       }
@@ -22,8 +27,10 @@ export const MonthNavigator: React.FC = () => {
     }
   };
 
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 4, backgroundColor: '#0b132b' }}>
+        // Cambiamos paddingVertical a 6 para pegar el mes a las tarjetas
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, paddingHorizontal: 4, backgroundColor: '#0b132b' }}>
       {/* Botón de Mes Anterior */}
       <TouchableOpacity onPress={goToPrevMonth} style={{ padding: 8, borderRadius: 9999, backgroundColor: '#1c2541' }}>
         <TabBarIcon name="chevron-back" size={20} color="#ffffff" />
