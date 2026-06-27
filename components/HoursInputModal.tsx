@@ -40,29 +40,45 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
     }
   }, [isOpen, dateStr, entries]);
 
-  // Nueva función basada en la API de Expo, infalible en celulares y web
+    // Función híbrida: Captura GPS real en celular y ubicación de red limpia en PC
   const captureCurrentLocation = async () => {
     try {
-      // 1. Solicita permisos de ubicación en caliente al dispositivo
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Permiso de ubicación denegado por el usuario.');
-        return null;
+      // SI ESTAMOS EN EL NAVEGADOR WEB (PC o Celular por Vercel)
+      if (Platform.OS === 'web') {
+        return new Promise((resolve) => {
+          if (!navigator.geolocation) return resolve(null);
+          
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve({
+                latitude: parseFloat(position.coords.latitude.toFixed(5)),
+                longitude: parseFloat(position.coords.longitude.toFixed(5)),
+                accuracy: position.coords.accuracy,
+                timestamp: position.timestamp
+              });
+            },
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 5000 }
+          );
+        });
       }
 
-      // 2. Extrae las coordenadas satelitales al instante
+      // SI ESTAMOS EN EL CELULAR NATIVO (Instalado como APK)
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return null;
+
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
 
       return {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
+        latitude: parseFloat(position.coords.latitude.toFixed(5)),
+        longitude: parseFloat(position.coords.longitude.toFixed(5)),
         accuracy: position.coords.accuracy,
         timestamp: position.timestamp
       };
     } catch (error) {
-      console.log("Error consultando el GPS nativo:", error);
+      console.log("Error consultando el GPS:", error);
       return null;
     }
   };

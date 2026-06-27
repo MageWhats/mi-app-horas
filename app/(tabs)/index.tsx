@@ -1,12 +1,11 @@
 // app/(tabs)/index.tsx
 import { useState } from 'react';
-import { FlatList, Linking, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, Text, TouchableOpacity, View } from 'react-native';
 import { HoursInputModal } from '../../components/HoursInputModal';
 import { MonthNavigator } from '../../components/MonthNavigator';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { TabBarIcon } from '../../components/TabBarIcon';
 import { useWorkHours } from '../../context/WorkHoursContext';
-
 
 export default function RegisterScreen() {
   const { entries, currentDate } = useWorkHours();
@@ -26,17 +25,6 @@ export default function RegisterScreen() {
     return daysArray;
   };
 
-  // Dispara el mapa satelital en una pestaña limpia usando coordenadas puras de Firebase
-  // Dispara el mapa satelital en la aplicación nativa de Google Maps de forma universal e infalible
-  const openGoogleMaps = (latitude: number, longitude: number) => {
-    // URL oficial estructurada con los parámetros de búsqueda satelital de Google
-    const url = `https://google.com{latitude},${longitude}`;
-    
-    // Usamos Linking.openURL de forma global; es 100% compatible con Web, Android e iOS y no lo bloquea el navegador
-    Linking.openURL(url).catch((err) => console.error("No se pudo abrir el mapa:", err));
-  };
-
-
   const renderDayItem = ({ item: dateStr }: { item: string }) => {
     const entry = entries[dateStr];
     const dayDate = new Date(dateStr + 'T00:00:00');
@@ -44,13 +32,13 @@ export default function RegisterScreen() {
     const weekday = dayDate.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase();
     const isSunday = dayDate.getDay() === 0;
 
-    // CORRECCIÓN CLAVE: Verificamos de forma estricta que existan los hijos latitude y longitude dentro del objeto location de Google
-    const hasValidGps = entry && entry.location && typeof entry.location.latitude === 'number';
+    // Validación estricta para saber si el registro tiene guardada la ubicación GPS
+    const hasLocation = entry && entry.location && typeof entry.location.latitude === 'number';
 
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1c2541', padding: 14, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: entry?.isHolidayOrSunday || isSunday ? '#3a86ff30' : '#3a4f7c15' }}>
         
-        {/* Bloque Calendario Izquierda */}
+        {/* Bloque Calendario Izquierda - SIEMPRE VISIBLE */}
         <View style={{ alignItems: 'center', marginRight: 16, minWidth: 36 }}>
           <Text style={{ fontSize: 11, fontWeight: '700', color: entry?.isHolidayOrSunday || isSunday ? '#ff007f' : '#8d99ae' }}>{weekday}</Text>
           <Text style={{ fontSize: 20, fontWeight: '700', color: '#ffffff' }}>{dayNumber}</Text>
@@ -76,39 +64,25 @@ export default function RegisterScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Bloque de Acciones Derecha (GPS Interceptado + Flecha) */}
+        {/* Bloque de Acciones Derecha Estilizado */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           
-                   {/* BOTÓN DE MAPA DEFINITIVO: Redirección de sistema directa inmune a bloqueos web */}
-          {hasValidGps ? (
-            <TouchableOpacity 
-              onPress={() => {
-                const url = `https://google.com{entry.location!.latitude},${entry.location!.longitude}`;
-                if (Platform.OS === 'web') {
-                  // Sobreescribe la barra del navegador directamente en caliente (Evita el about:blank)
-                  window.location.href = url;
-                } else {
-                  // Comportamiento normal en celular nativo (APK)
-                  openGoogleMaps(entry.location!.latitude, entry.location!.longitude);
-                }
-              }}
-              activeOpacity={0.7}
+          {/* INDICADOR VISUAL MAPA: Sello estático discreto al costado derecho */}
+          {hasLocation && (
+            <View 
               style={{ 
-                padding: 8, 
-                borderRadius: 10, 
+                padding: 6, 
+                borderRadius: 8, 
                 backgroundColor: '#0b132b', 
                 borderWidth: 1, 
-                borderColor: 'rgba(0, 245, 212, 0.4)',
-                display: 'flex',
+                borderColor: 'rgba(0, 245, 212, 0.2)',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}
             >
-              <TabBarIcon name="map-outline" size={16} color="#00f5d4" />
-            </TouchableOpacity>
-          ) : null}
-
-
+              <TabBarIcon name="map" size={14} color="#00f5d4" />
+            </View>
+          )}
 
           <TouchableOpacity onPress={() => setSelectedDate(dateStr)} activeOpacity={0.7}>
             <TabBarIcon name="chevron-forward" size={16} color="#3a4f7c" />
@@ -133,9 +107,11 @@ export default function RegisterScreen() {
 
       <HoursInputModal 
         isOpen={selectedDate !== null} 
-        onClose={() => setSelectedDate(null)} 
+        onClose={() => setSelectedDate(null)} // CORRECCIÓN: Agregar 'onClose'
         dateStr={selectedDate} 
       />
+
     </ScreenContainer>
   );
 }
+
