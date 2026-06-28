@@ -133,7 +133,7 @@ export default function RegisterScreen() {
   );
 }
 
-// Reemplaza el bloque final por este diccionario limpio de TypeScript
+// 2. EL DICCIONARIO DE ESTILOS QUE HACÍA FALTA ABAJO DEL TODO
 const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
@@ -142,7 +142,6 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 4,
     backgroundColor: '#0b132b',
-    width: '100%' // Agrega ancho completo limpio
   },
   headerTitle: {
     fontSize: 22,
@@ -179,4 +178,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   }
 });
-

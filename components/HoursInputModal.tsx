@@ -144,9 +144,11 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                       style={styles.picker}
                       dropdownIconColor="#ffffff"
                     >
-                      {hoursOptions.map((h) => (
-                        <Picker.Item key={`sh-${h}`} label={h} value={h} color={Platform.OS === 'web' ? '#ffffff' : '#0b132b'} />
-                      ))}
+                    // 1. En la Hora de Entrada (Horas)
+{hoursOptions.map((h) => (
+  <Picker.Item key={`sh-${h}`} label={h} value={h} color={Platform.OS === 'web' ? '#ffffff' : '#ffffff'} />
+))}
+
                     </Picker>
                   </View>
                   <Text style={{ color: '#3a4f7c', fontWeight: '700', fontSize: 18 }}>:</Text>
@@ -157,9 +159,11 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                       style={styles.picker}
                       dropdownIconColor="#ffffff"
                     >
-                      {minutesOptions.map((m) => (
-                        <Picker.Item key={`sm-${m}`} label={m} value={m} color={Platform.OS === 'web' ? '#ffffff' : '#0b132b'} />
-                      ))}
+                      // 2. En la Hora de Entrada (Minutos)
+{minutesOptions.map((m) => (
+  <Picker.Item key={`sm-${m}`} label={m} value={m} color={Platform.OS === 'web' ? '#ffffff' : '#ffffff'} />
+))}
+
                     </Picker>
                   </View>
                 </View>
@@ -176,9 +180,11 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                       style={styles.picker}
                       dropdownIconColor="#ffffff"
                     >
-                      {hoursOptions.map((h) => (
-                        <Picker.Item key={`eh-${h}`} label={h} value={h} color={Platform.OS === 'web' ? '#ffffff' : '#0b132b'} />
-                      ))}
+                    // 3. En la Hora de Salida (Horas)
+{hoursOptions.map((h) => (
+  <Picker.Item key={`eh-${h}`} label={h} value={h} color={Platform.OS === 'web' ? '#ffffff' : '#ffffff'} />
+))}
+
                     </Picker>
                   </View>
                   <Text style={{ color: '#3a4f7c', fontWeight: '700', fontSize: 18 }}>:</Text>
@@ -189,9 +195,11 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                       style={styles.picker}
                       dropdownIconColor="#ffffff"
                     >
-                      {minutesOptions.map((m) => (
-                        <Picker.Item key={`em-${m}`} label={m} value={m} color={Platform.OS === 'web' ? '#ffffff' : '#0b132b'} />
-                      ))}
+                    // 4. En la Hora de Salida (Minutos)
+{minutesOptions.map((m) => (
+  <Picker.Item key={`em-${m}`} label={m} value={m} color={Platform.OS === 'web' ? '#ffffff' : '#ffffff'} />
+))}
+
                     </Picker>
                   </View>
                 </View>
