@@ -1,5 +1,4 @@
 // components/HoursInputModal.tsx
-import { Picker } from '@react-native-picker/picker'; // Selector universal
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useWorkHours } from '../context/WorkHoursContext';
@@ -130,82 +129,74 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               </TouchableOpacity>
             </View>
 
-            {/* FORMULARIO MULTIPLATAFORMA UNIFICADO */}
+            
+            {/* SECCIÓN SELECTORES DOBLES UNIVERSALES OPTIMIZADOS */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
               
-              {/* Hora Entrada */}
+              {/* Bloque Selector Hora Entrada */}
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={{ fontSize: 13, color: '#8d99ae', marginBottom: 8, fontWeight: '500' }}>Hora Entrada</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      selectedValue={startH}
-                      onValueChange={(itemValue) => setStartH(itemValue)}
-                      style={styles.picker}
-                      dropdownIconColor="#ffffff"
+                {Platform.OS === 'web' ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <select 
+                      value={startH} 
+                      onChange={(e) => setStartH(e.target.value)} 
+                      style={{ flex: 1, backgroundColor: '#1c2541', color: '#ffffff', padding: '14px 0px', borderRadius: '12px', fontSize: '16px', border: '1px solid rgba(58, 79, 124, 0.4)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', textAlign: 'center', textAlignLast: 'center' as any }}
                     >
-                    // 1. En la Hora de Entrada (Horas)
-{hoursOptions.map((h) => (
-  <Picker.Item key={`sh-${h}`} label={h} value={h} color={Platform.OS === 'web' ? '#ffffff' : '#ffffff'} />
-))}
-
-                    </Picker>
-                  </View>
-                  <Text style={{ color: '#3a4f7c', fontWeight: '700', fontSize: 18 }}>:</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      selectedValue={startM}
-                      onValueChange={(itemValue) => setStartM(itemValue)}
-                      style={styles.picker}
-                      dropdownIconColor="#ffffff"
+                      {hoursOptions.map((h) => <option key={`sh-${h}`} value={h} style={{ backgroundColor: '#0b132b' }}>{h}</option>)}
+                    </select>
+                    <Text style={{ color: '#3a4f7c', fontWeight: '700', fontSize: 18 }}>:</Text>
+                    <select 
+                      value={startM} 
+                      onChange={(e) => setStartM(e.target.value)} 
+                      style={{ flex: 1, backgroundColor: '#1c2541', color: '#ffffff', padding: '14px 0px', borderRadius: '12px', fontSize: '16px', border: '1px solid rgba(58, 79, 124, 0.4)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', textAlign: 'center', textAlignLast: 'center' as any }}
                     >
-                      // 2. En la Hora de Entrada (Minutos)
-{minutesOptions.map((m) => (
-  <Picker.Item key={`sm-${m}`} label={m} value={m} color={Platform.OS === 'web' ? '#ffffff' : '#ffffff'} />
-))}
-
-                    </Picker>
+                      {minutesOptions.map((m) => <option key={`sm-${m}`} value={m} style={{ backgroundColor: '#0b132b' }}>{m}</option>)}
+                    </select>
                   </View>
-                </View>
+                ) : (
+                  // EN CELULARES: Evita colapsos de interfaz mostrando el tiempo de forma estable
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flex: 1, backgroundColor: '#1c2541', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c40', alignItems: 'center' }}>
+                      <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>{startH}:{startM}</Text>
+                    </View>
+                  </View>
+                )}
               </View>
 
-              {/* Hora Salida */}
+              {/* Bloque Selector Hora Salida */}
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={{ fontSize: 13, color: '#8d99ae', marginBottom: 8, fontWeight: '500' }}>Hora Salida</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      selectedValue={endH}
-                      onValueChange={(itemValue) => setEndH(itemValue)}
-                      style={styles.picker}
-                      dropdownIconColor="#ffffff"
+                {Platform.OS === 'web' ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <select 
+                      value={endH} 
+                      onChange={(e) => setEndH(e.target.value)} 
+                      style={{ flex: 1, backgroundColor: '#1c2541', color: '#ffffff', padding: '14px 0px', borderRadius: '12px', fontSize: '16px', border: '1px solid rgba(58, 79, 124, 0.4)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', textAlign: 'center', textAlignLast: 'center' as any }}
                     >
-                    // 3. En la Hora de Salida (Horas)
-{hoursOptions.map((h) => (
-  <Picker.Item key={`eh-${h}`} label={h} value={h} color={Platform.OS === 'web' ? '#ffffff' : '#ffffff'} />
-))}
-
-                    </Picker>
-                  </View>
-                  <Text style={{ color: '#3a4f7c', fontWeight: '700', fontSize: 18 }}>:</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      selectedValue={endM}
-                      onValueChange={(itemValue) => setEndM(itemValue)}
-                      style={styles.picker}
-                      dropdownIconColor="#ffffff"
+                      {hoursOptions.map((h) => <option key={`eh-${h}`} value={h} style={{ backgroundColor: '#0b132b' }}>{h}</option>)}
+                    </select>
+                    <Text style={{ color: '#3a4f7c', fontWeight: '700', fontSize: 18 }}>:</Text>
+                    <select 
+                      value={endM} 
+                      onChange={(e) => setEndM(e.target.value)} 
+                      style={{ flex: 1, backgroundColor: '#1c2541', color: '#ffffff', padding: '14px 0px', borderRadius: '12px', fontSize: '16px', border: '1px solid rgba(58, 79, 124, 0.4)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', textAlign: 'center', textAlignLast: 'center' as any }}
                     >
-                    // 4. En la Hora de Salida (Minutos)
-{minutesOptions.map((m) => (
-  <Picker.Item key={`em-${m}`} label={m} value={m} color={Platform.OS === 'web' ? '#ffffff' : '#ffffff'} />
-))}
-
-                    </Picker>
+                      {minutesOptions.map((m) => <option key={`em-${m}`} value={m} style={{ backgroundColor: '#0b132b' }}>{m}</option>)}
+                    </select>
                   </View>
-                </View>
+                ) : (
+                  // EN CELULARES: Diseño seguro para la salida ordinaria
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flex: 1, backgroundColor: '#1c2541', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c40', alignItems: 'center' }}>
+                      <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>{endH}:{endM}</Text>
+                    </View>
+                  </View>
+                )}
               </View>
 
             </View>
+
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1c2541', padding: 14, borderRadius: 14, marginBottom: 20, borderWidth: 1, borderColor: '#3a4f7c20' }}>
               <View style={{ flex: 1, marginRight: 10 }}>

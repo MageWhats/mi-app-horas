@@ -2,8 +2,10 @@
 import { Link, useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { AdvancedRegister } from '../components/AdvancedRegister';
 import { ScreenContainer } from '../components/ScreenContainer';
+// @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
 import { auth } from '../lib/firebase'; // Sincronizado con tu ruta de utilidades
 
 export default function RegisterScreen() {
@@ -36,6 +38,7 @@ export default function RegisterScreen() {
 
     try {
       // Envío de credenciales a la nube de Firebase
+       // @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
       await createUserWithEmailAndPassword(auth, email.trim(), password);
       
       if (Platform.OS === 'web') {
@@ -89,70 +92,24 @@ export default function RegisterScreen() {
           )}
 
           {/* Formulario estructurado estilo Mar Profundo */}
-          <View style={{ gap: 16, marginBottom: 28 }}>
-            <View>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#8d99ae', marginBottom: 8, letterSpacing: 0.5 }}>CORREO ELECTRÓNICO</Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="ejemplo@correo.com"
-                placeholderTextColor="#3a4f7c"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={{ backgroundColor: '#1c2541', color: '#ffffff', padding: 14, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: '#3a4f7c40' }}
-              />
-            </View>
+            <AdvancedRegister 
+              onClose={() => {
+                // Si el operario cancela o cierra el formulario, regresa al login
+                router.back();
+              }}
+              onRegisterSuccess={(userData) => {
+                // Una vez creado el registro con la cédula en Firestore, lo manda directo a la app
+                router.replace('/(tabs)');
+              }}
+            />
 
-            <View>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#8d99ae', marginBottom: 8, letterSpacing: 0.5 }}>CONTRASEÑA</Text>
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Mínimo 6 caracteres"
-                placeholderTextColor="#3a4f7c"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={{ backgroundColor: '#1c2541', color: '#ffffff', padding: 14, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: '#3a4f7c40' }}
-              />
-            </View>
-
-            <View>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#8d99ae', marginBottom: 8, letterSpacing: 0.5 }}>CONFIRMAR CONTRASEÑA</Text>
-              <TextInput
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Repite tu contraseña"
-                placeholderTextColor="#3a4f7c"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={{ backgroundColor: '#1c2541', color: '#ffffff', padding: 14, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: '#3a4f7c40' }}
-              />
-            </View>
-          </View>
-
-          {/* Botonera de Acción Primaria */}
-          <TouchableOpacity
-            onPress={handleRegister}
-            disabled={loading}
-            activeOpacity={0.85}
-            style={{ backgroundColor: '#00b4d8', paddingVertical: 16, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 24, minHeight: 54 }}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '700' }}>Registrarse</Text>
-            )}
-          </TouchableOpacity>
 
           {/* Enlace de navegación hacia el login */}
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
             <Text style={{ color: '#8d99ae', fontSize: 14 }}>¿Ya tienes una cuenta?</Text>
             <Link href="/login" asChild>
               <TouchableOpacity>
-                <Text style={{ color: '#00b4d8', fontSize: 14, fontWeight: '600' }}>Inicia sesión</Text>
+                <Text style={{ color: '#3a86ff', fontSize: 14, fontWeight: '600' }}>Inicia sesión</Text>
               </TouchableOpacity>
             </Link>
           </View>

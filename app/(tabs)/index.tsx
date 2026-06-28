@@ -106,19 +106,21 @@ export default function RegisterScreen() {
 
         <MonthNavigator />
         
-        <FlatList
+         {/* Cambiamos la línea 109 para que cierre correctamente con el signo '>' al final */}
+        <FlatList<string>
           data={generateDaysOfMonth()}
           keyExtractor={(item) => item}
           renderItem={renderDayItem}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 80 }} 
+          contentContainerStyle={{ paddingBottom: 80 }}
         />
 
-        <HoursInputModal 
-          isOpen={selectedDate !== null} 
-          onClose={() => setSelectedDate(null)} 
-          dateStr={selectedDate} 
-        />
+          <HoursInputModal
+            isOpen={selectedDate !== null}
+            onClose={() => setSelectedDate(null)}
+            dateStr={selectedDate}
+          />
+
       </ScreenContainer>
 
       {/* BOTÓN FLOTANTE "+ HOY" UBICADO PERFECTAMENTE ABAJO A LA DERECHA */}

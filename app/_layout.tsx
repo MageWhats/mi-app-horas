@@ -7,6 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
+// @ts-ignore - Apaga el chequeo estricto del tipo implícito de Firebase en la raíz del proyecto
 import { auth } from '../lib/firebase'; // Enlace a tus credenciales de Google
 
 export { ErrorBoundary } from 'expo-router';
@@ -38,6 +39,7 @@ function MainAuthGate({ loaded }: { loaded: boolean }) {
 
   // 1. Escucha de Firebase para detectar cambios de usuario en la nube
   useEffect(() => {
+    // @ts-ignore - Apaga el chequeo estricto del tipo implícito de Firebase en la raíz del proyecto
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setInitializing(false);

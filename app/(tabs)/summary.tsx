@@ -21,6 +21,11 @@ export default function SummaryScreen() {
 
   const hasEntries = Object.keys(entries).length > 0;
 
+   // BUSCADOR DE EXCESOS SEMANALES
+  const weeklyOvertimeAlerts = Object.entries(summary.weeklyTotals || {}).filter(
+    ([,hours]) => (hours as number) > 44
+  );
+
   return (
     <ScreenContainer>
       {/* 1. CONFIGURACIÓN COMPACTA: Oculta la cabecera blanca por defecto en cualquier celular o web */}
@@ -94,6 +99,22 @@ export default function SummaryScreen() {
           ) : (
             <>
               <SummaryCard summary={summary} />
+            
+              {/* ⚠️ TARJETA DE ALERTA DE JORNADA MÁXIMA DETECTADA */}
+              {weeklyOvertimeAlerts.map(([weekName, hours]) => {
+                const extraHours = ((hours as number) - 44).toFixed(1);
+                return (
+                  <View key={weekName} style={{ backgroundColor: 'rgba(249, 115, 22, 0.15)', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#f9731650', marginBottom: 12, marginTop: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 6 }}>
+                      <TabBarIcon name="alert-circle" size={16} color="#f97316" />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#f97316', letterSpacing: 0.5 }}>ALERTA: JORNADA MÁXIMA EXCEDIDA</Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 16 }}>
+                      • En la <Text style={{ fontWeight: '700', color: '#ffffff' }}>Semana {Number(weekName) + 1}</Text> trabajaste <Text style={{ fontWeight: '700', color: '#ffffff' }}>{hours}h</Text>. Superaste el límite legal de 44h por ley en Colombia (<Text style={{ fontWeight: '700', color: '#f97316' }}>+{extraHours}h extra</Text>).
+                    </Text>
+                  </View>
+                );
+              })}
               <WeeklyBarChart weeklyHours={summary.weeklyTotals} />
             </>
           )}

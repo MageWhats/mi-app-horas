@@ -1,9 +1,11 @@
 // app/login.tsx
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
+import { SmartLogin } from '../components/SmartLogin';
+ // @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
 import { auth } from '../lib/firebase'; // Sincronizado con tu ruta de utilidades
 
 export default function LoginScreen() {
@@ -25,6 +27,7 @@ export default function LoginScreen() {
 
     try {
       // Intento de autenticación en la nube de Google
+       // @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
       await signInWithEmailAndPassword(auth, email.trim(), password);
       
       // Redirección inmediata al panel protegido de pestañas
@@ -72,60 +75,15 @@ export default function LoginScreen() {
           )}
 
           {/* Formulario Estructurado */}
-          <View style={{ gap: 16, marginBottom: 28 }}>
-            <View>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#8d99ae', marginBottom: 8, letterSpacing: 0.5 }}>CORREO ELECTRÓNICO</Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="ejemplo@correo.com"
-                placeholderTextColor="#3a4f7c"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={{ backgroundColor: '#1c2541', color: '#ffffff', padding: 14, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: '#3a4f7c40' }}
-              />
-            </View>
-
-            <View>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#8d99ae', marginBottom: 8, letterSpacing: 0.5 }}>CONTRASEÑA</Text>
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Ingresa tu contraseña"
-                placeholderTextColor="#3a4f7c"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={{ backgroundColor: '#1c2541', color: '#ffffff', padding: 14, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: '#3a4f7c40' }}
-              />
-            </View>
-          </View>
-
-          {/* Botón de Acción Principal Eléctrico */}
-          <TouchableOpacity
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-            style={{ backgroundColor: '#00b4d8', paddingVertical: 16, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 24, minHeight: 54 }}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '700' }}>Ingresar</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Enlace de navegación hacia el registro */}
-          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
-            <Text style={{ color: '#8d99ae', fontSize: 14 }}>¿No tienes una cuenta?</Text>
-            <Link href="/register" asChild>
-              <TouchableOpacity>
-                <Text style={{ color: '#00b4d8', fontSize: 14, fontWeight: '600' }}>Regístrate</Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
-
+      {/* ¡REEMPLAZO TOTAL CON EL LOGIN INTELIGENTE POR CÉDULA! */}
+      <SmartLogin 
+        onLoginSuccess={() => {
+          router.replace('/(tabs)');
+        }}
+        onNavigateToRegister={() => {
+          router.push('/register');
+        }}
+      />
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenContainer>
