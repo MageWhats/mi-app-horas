@@ -14,57 +14,75 @@ export const SmartLogin: React.FC<SmartLoginProps> = ({ onLoginSuccess, onNaviga
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!cedula.trim() || !password.trim()) {
-      alert('Por favor ingresa tu número de cédula y contraseña.');
+    const inputClean = cedula.trim(); // Captura el texto del primer cuadro (puede ser Cédula o Correo)
+    const passClean = password.trim();
+
+    if (!inputClean || !passClean) {
+      alert('Por favor ingresa tus credenciales y contraseña.');
       return;
     }
 
     setLoading(true);
 
     try {
-      // Importamos las librerías oficiales de Firebase de forma segura
       const { auth: fbAuth, db: fbDb } = require('../lib/firebase');
       const { signInWithEmailAndPassword } = require('firebase/auth');
       const { doc, getDoc } = require('firebase/firestore');
 
-      // 1. BUSQUEDA INTELIGENTE: Buscamos en Firestore el documento bautizado con la Cédula
-      const userDocRef = doc(fbDb, 'users', cedula.trim());
-      const userDocSnap = await getDoc(userDocRef);
+      let finalEmail = '';
+      let isOldUser = false;
+      let userDisplayFormName = '';
 
-      if (!userDocSnap.exists()) {
+      // 🔍 DETECTOR INTELIGENTE: ¿Es un correo (usuario viejo) o una cédula (usuario nuevo)?
+      if (inputClean.includes('@')) {
+        // ES UN USUARIO ANTIGUO: Usamos el correo directo que digitó
+        finalEmail = inputClean.toLowerCase();
+        isOldUser = true;
+      } else {
+        // ES UN USUARIO NUEVO: Buscamos la cédula en Cloud Firestore
+        const userDocRef = doc(fbDb, 'users', inputClean);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (!userDocSnap.exists()) {
+          setLoading(false);
+          alert('El número de cédula ingresado no está registrado en la empresa corporativa.');
+          return;
+        }
+
+        const userData = userDocSnap.data();
+        finalEmail = userData.email;
+        userDisplayFormName = userData.fullName;
+      }
+
+      if (!finalEmail) {
         setLoading(false);
-        alert('El número de cédula ingresado no está registrado en la empresa.');
+        alert('Error: No se encontró un correo electrónico válido para acceder.');
         return;
       }
 
-      // 2. RECUPERACIÓN INVISIBLE: Extraemos el correo amarrado a esa cédula
-      const userData = userDocSnap.data();
-      const associatedEmail = userData.email;
+      // 🔑 LOG IN COMPARTIDO: Autenticamos en Firebase Auth con las credenciales resultantes
+      const userCredential = await signInWithEmailAndPassword(fbAuth, finalEmail, passClean);
+      const loggedUser = userCredential.user;
 
-      if (!associatedEmail) {
-        setLoading(false);
-        alert('Error técnico: No se encontró un correo electrónico asociado a esta cédula.');
-        return;
+      // Si es un usuario antiguo, verificamos de rapidez si de verdad le falta crear su perfil por cédula
+      if (isOldUser) {
+        // Consultamos la colección por si ya se había migrado antes
+        // (Esto nos servirá en el siguiente paso para abrirle la ventana flotante)
+        console.log("Usuario antiguo detectado ingresando por correo:", loggedUser.uid);
       }
 
-      // 3. LOG IN OFICIAL: Autenticamos en la nube con el correo recuperado y la clave
-      const userCredential = await signInWithEmailAndPassword(fbAuth, associatedEmail, password);
-      
       setLoading(false);
-      alert(`¡Bienvenido de nuevo, ${userData.fullName}!`);
-      onLoginSuccess(userCredential.user);
+      alert(isOldUser ? '¡Bienvenido! Por favor actualiza tus datos corporativos.' : `¡Bienvenido de nuevo, ${userDisplayFormName}!`);
+      onLoginSuccess(loggedUser);
 
     } catch (error: any) {
       setLoading(false);
-      console.error("Error en Login Inteligente: ", error);
+      console.error("Error en Login Híbrido: ", error);
 
-      // Control de errores amigable
       if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        alert('La contraseña ingresada es incorrecta. Inténtalo de nuevo.');
-      } else if (error.code === 'auth/user-not-found') {
-        alert('Credenciales inválidas en el sistema de seguridad.');
+        alert('La contraseña ingresada es incorrecta o las credenciales no existen.');
       } else {
-        alert('No se pudo iniciar sesión. Revisa tu conexión a internet.');
+        alert('No se pudo verificar el acceso. Revisa tu conexión de red.');
       }
     }
   };
@@ -84,7 +102,7 @@ export const SmartLogin: React.FC<SmartLoginProps> = ({ onLoginSuccess, onNaviga
           <Text style={styles.subtitle}>SISTEMA DE CONTROL HORARIO</Text>
         </View>
 
-        {/* Campos de Entrada */}
+             {/* CAMPO DE CÉDULA INTELIGENTE CON GUÍA PARA USUARIOS ANTIGUOS */}
           <Text style={styles.label}>Número de Cédula</Text>
           <View style={styles.inputContainer}>
             <View style={{ marginRight: 10 }}>
@@ -93,12 +111,19 @@ export const SmartLogin: React.FC<SmartLoginProps> = ({ onLoginSuccess, onNaviga
             <TextInput 
               value={cedula} 
               onChangeText={setCedula} 
-              keyboardType="numeric" 
-              placeholder="Ingresa tu cédula" 
+              keyboardType="default" // Lo cambiamos a default para que permita escribir letras si meten el correo
+              placeholder="Cédula o Correo electrónico" 
               placeholderTextColor="#3a4f7c" 
               style={styles.input} 
+              autoCapitalize="none"
             />
           </View>
+          
+          {/* NOTA DE AYUDA EXCLUSIVA PARA MIGRACIÓN */}
+          <Text style={{ fontSize: 11, color: '#00b4d8', marginTop: 6, lineHeight: 14, fontWeight: '500' }}>
+            💡 Si ya tenías cuenta en la versión anterior, ingresa aquí con tu **correo electrónico** para vincular tu cédula sin perder tus horas.
+          </Text>
+
 
 
           <Text style={styles.label}>Contraseña</Text>
