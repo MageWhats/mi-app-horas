@@ -42,15 +42,7 @@ export const MonthNavigator: React.FC = () => {
           {months[currentDate.getMonth()]} {currentDate.getFullYear()}
         </Text>
 
-        {/* Botón discreto de Cerrar Sesión estilo Mar Profundo */}
-        <TouchableOpacity 
-          onPress={handleSignOut} 
-          activeOpacity={0.7}
-          style={{ padding: 6, borderRadius: 8, backgroundColor: '#1c2541', borderWidth: 1, borderColor: '#ff007f30' }}
-        >
-          {/* Usamos el vector close como salida temporal o el mapeado en tu TabBarIcon */}
-          <TabBarIcon name="close" size={16} color="#ff007f" />
-        </TouchableOpacity>
+
       </View>
 
       {/* Botón de Mes Siguiente */}

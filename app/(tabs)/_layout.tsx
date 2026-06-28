@@ -76,6 +76,18 @@ export default function TabLayout() {
             ),
           }}
         />
+              {/* PESTAÑA DE PERFIL COMPLETAMENTE ESTILIZADA */}
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Perfil', // Nombre amigable que aparece en la barra inferior
+          headerShown: false, // ¡CLAVE! Oculta esa barra superior fea con la flecha gris y el texto 'profile'
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'person' : 'person-outline'} color={color as string} />
+          ),
+        }}
+      />
+
       </Tabs>
             {/* ⚠️ LA VENTANA FLOTANTE NARANJA DE MIGRACIÓN CORPORATIVA */}
       {currentUser && (

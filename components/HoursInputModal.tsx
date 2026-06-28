@@ -3,6 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useWorkHours } from '../context/WorkHoursContext';
 import { TabBarIcon } from './TabBarIcon';
+// ¡AÑADE ESTA IMPORTACIÓN COMPLEMENTARIA!
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+
 
 interface HoursInputModalProps {
   isOpen: boolean;
@@ -15,15 +18,13 @@ const hoursOptions = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, 
 const minutesOptions = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
 export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClose, dateStr }) => {
-  if (!dateStr) return null;
-
   const { entries, saveDayEntry, deleteDayEntry } = useWorkHours();
 
   const [startH, setStartH] = useState('08');
   const [startM, setStartM] = useState('00');
   const [endH, setEndH] = useState('17');
   const [endM, setEndM] = useState('00');
-  
+
   const [isHoliday, setIsHoliday] = useState(false);
   const [notes, setNotes] = useState('');
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -51,6 +52,11 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
       }
     }
   }, [isOpen, dateStr, entries]);
+
+  // Guarda de salida: SIEMPRE después de declarar todos los hooks, nunca antes.
+  // Así el número y orden de hooks es idéntico en cada render y React no rompe
+  // su consistencia interna ("Expected static flag was missing").
+  if (!dateStr) return null;
 
   const captureCurrentLocation = (): Promise<any> => {
     return new Promise((resolve) => {
@@ -107,6 +113,43 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
 
   const hasExistingData = !!entries[dateStr];
 
+    // Disparador nativo para el reloj de Entrada en Android
+  const showStartTimePicker = () => {
+    DateTimePickerAndroid.open({
+      value: new Date(new Date().setHours(Number(startH), Number(startM))),
+            onValueChange: (event: any, selectedDate: any) => {
+
+        if (selectedDate) {
+          const hours = String(selectedDate.getHours()).padStart(2, '0');
+          const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
+          setStartH(hours);
+          setStartM(minutes);
+        }
+      },
+      mode: 'time',
+      is24Hour: true,
+    });
+  };
+
+  // Disparador nativo para el reloj de Salida en Android
+  const showEndTimePicker = () => {
+    DateTimePickerAndroid.open({
+      value: new Date(new Date().setHours(Number(endH), Number(endM))),
+            onValueChange: (event: any, selectedDate: any) => {
+
+        if (selectedDate) {
+          const hours = String(selectedDate.getHours()).padStart(2, '0');
+          const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
+          setEndH(hours);
+          setEndM(minutes);
+        }
+      },
+      mode: 'time',
+      is24Hour: true,
+    });
+  };
+
+
   return (
     <Modal visible={isOpen} animationType="slide" transparent={true} onRequestClose={onClose}>
       <KeyboardAvoidingView 
@@ -155,12 +198,12 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                     </select>
                   </View>
                 ) : (
-                  // EN CELULARES: Evita colapsos de interfaz mostrando el tiempo de forma estable
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={{ flex: 1, backgroundColor: '#1c2541', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c40', alignItems: 'center' }}>
-                      <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>{startH}:{startM}</Text>
-                    </View>
-                  </View>
+                  
+                  // EN CELULARES: ¡Ahora es un botón táctil real que despierta al reloj nativo!
+                  <TouchableOpacity onPress={showStartTimePicker} activeOpacity={0.7} style={{ backgroundColor: '#1c2541', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c40', alignItems: 'center', width: '100%' }}>
+                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>{startH}:{startM}</Text>
+                  </TouchableOpacity>
+
                 )}
               </View>
 
@@ -186,12 +229,11 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                     </select>
                   </View>
                 ) : (
-                  // EN CELULARES: Diseño seguro para la salida ordinaria
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={{ flex: 1, backgroundColor: '#1c2541', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c40', alignItems: 'center' }}>
-                      <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>{endH}:{endM}</Text>
-                    </View>
-                  </View>
+                  // EN CELULARES: Botón táctil para el reloj de salida ordinaria
+                  <TouchableOpacity onPress={showEndTimePicker} activeOpacity={0.7} style={{ backgroundColor: '#1c2541', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c40', alignItems: 'center', width: '100%' }}>
+                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>{endH}:{endM}</Text>
+                  </TouchableOpacity>
+
                 )}
               </View>
 

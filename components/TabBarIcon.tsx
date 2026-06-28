@@ -23,9 +23,13 @@ const SVG_ICONS: Record<string, string> = {
   'moon-outline': 'M12.3 2a10 10 0 0 0-1.9.2 10 10 0 1 1-1.4 16.2A10 10 0 1 0 12.3 2z',
   'trending-up-outline': 'M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6h-6z',
   'information-circle-outline': 'M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z',
-  // NUEVO VECTOR DE MAPA
-  // CORRECCIÓN: Dejar la clave como 'map' para que el limpiador la encuentre
-  'map': 'M15 5l-6-3-6 3v14l6-3 6 3 6-3V5l-6 3zm-1 11.7l-4-2V3.8l4 2v10.9z'
+  'map': 'M15 5l-6-3-6 3v14l6-3 6 3 6-3V5l-6 3zm-1 11.7l-4-2V3.8l4 2v10.9z',
+  'person': 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
+  'person-outline': 'M12 6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 10c2.7 0 5.8 1.13 6 2v1H6v-1c.2-1.87 3.3-2 6-2zm0-12c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 10c-3.33 0-10 1.67-10 5v4h20v-4c0-3.33-6.67-5-10-5z',
+    // Cambiamos el nombre de la clave de 'log-out-outline' a 'log-out'
+  'log-out': 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4h-2v4H5V5h14v4h2V5c0-1.1-.9-2-2-2zm-2.5 8.5H10v1h6.5V16L21 12.5 16.5 9v2.5z',
+  'log-out-outline': 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4h-2v4H5V5h14v4h2V5c0-1.1-.9-2-2-2zm-2.5 8.5H10v1h6.5V16L21 12.5 16.5 9v2.5z'
+
 
 };
 
