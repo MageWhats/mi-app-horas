@@ -14,9 +14,19 @@ export default function SummaryScreen() {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
+  const totalDaysRegisteredInMonth = Object.keys(entries).filter(dateKey => {
+    const parts = dateKey.split('-');
+    if (parts.length < 2) return false;
+
+    const entryYear = parseInt(parts[0], 10);
+    const entryMonth = parseInt(parts[1], 10) - 1; // Ajuste de 1 para el índice del mes
+    return entryYear === year && entryMonth === month;
+  }).length;
+
   const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
-  const completionPercentage = totalDaysInMonth > 0 
-    ? Math.round((summary.workedDays / totalDaysInMonth) * 100) 
+
+  const completionPercentage = totalDaysInMonth
+    ? Math.round((totalDaysRegisteredInMonth / totalDaysInMonth) * 100) 
     : 0;
 
   const hasEntries = Object.keys(entries).length > 0;
@@ -35,10 +45,7 @@ export default function SummaryScreen() {
       <View style={styles.headerRow}>
         <Text style={styles.headerTitle}>Resumen</Text>
         
-        {/* Botón de configuración minimalista unificado */}
-        <TouchableOpacity activeOpacity={0.7} style={styles.settingsButton}>
-          <TabBarIcon name="close" size={16} color="#ffffff" />
-        </TouchableOpacity>
+
       </View>
 
       <MonthNavigator />
@@ -82,7 +89,7 @@ export default function SummaryScreen() {
               <View style={{ height: '100%', width: `${completionPercentage}%`, backgroundColor: '#00b4d8', borderRadius: 4 }} />
             </View>
             <Text style={{ fontSize: 11, color: '#8d99ae', marginTop: 6 }}>
-              Has registrado {summary.workedDays} de {totalDaysInMonth} días totales este mes.
+              Has registrado {totalDaysRegisteredInMonth} de {totalDaysInMonth} días totales este mes.
             </Text>
           </View>
 

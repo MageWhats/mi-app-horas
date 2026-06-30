@@ -88,8 +88,8 @@ export const calculateMonthlySummary = (entries: DayEntry[]): MonthlySummary => 
   const weeklyTotals = [0, 0, 0, 0, 0]; // 5 semanas en un mes
 
   entries.forEach((entry) => {
+    workedDays++;
     if (entry.hours > 0) {
-      workedDays++;
       totalHours += entry.hours;
 
       // 1. CÁLCULO DIARIO DE HORAS EXTRAS: Si supera las 7.5 horas base del contrato

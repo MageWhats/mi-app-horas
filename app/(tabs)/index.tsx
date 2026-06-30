@@ -101,23 +101,6 @@ export default function RegisterScreen() {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, paddingBottom: 12, backgroundColor: '#0b132b' }}>
         <Text style={{ fontSize: 22, fontWeight: '800', color: '#ffffff', letterSpacing: -0.5 }}>Registro</Text>
         
-        {/* Este botón ahora es el Cerrar Sesión oficial, elegante y con acción real */}
-        <TouchableOpacity 
-          onPress={async () => {
-            try {
-              const { auth: fbAuth } = require('../../lib/firebase'); // Verifica que la ruta apunte a tu firebase.ts
-              await fbAuth.signOut();
-              alert('Sesión cerrada correctamente.');
-            } catch (error) {
-              console.error(error);
-            }
-          }}
-          activeOpacity={0.7} 
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10, backgroundColor: 'rgba(255, 0, 127, 0.1)', borderWidth: 1, borderColor: 'rgba(255, 0, 127, 0.2)' }}
-        >
-          <TabBarIcon name="log-out" size={14} color="#ff007f" />
-          <Text style={{ color: '#ff007f', fontSize: 12, fontWeight: '700', letterSpacing: 0.3 }}>Salir</Text>
-        </TouchableOpacity>
       </View>
 
 
