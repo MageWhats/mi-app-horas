@@ -1,11 +1,9 @@
 // components/HoursInputModal.tsx
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useWorkHours } from '../context/WorkHoursContext';
 import { TabBarIcon } from './TabBarIcon';
 // ¡AÑADE ESTA IMPORTACIÓN COMPLEMENTARIA!
-import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-
 
 interface HoursInputModalProps {
   isOpen: boolean;
@@ -13,9 +11,11 @@ interface HoursInputModalProps {
   dateStr: string | null;
 }
 
+/*
 // Opciones de Horas (00-23) y Minutos (00-59)
 const hoursOptions = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const minutesOptions = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+*/
 
 export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClose, dateStr }) => {
   const { entries, saveDayEntry, deleteDayEntry } = useWorkHours();
@@ -28,24 +28,21 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
   const [isHoliday, setIsHoliday] = useState(false);
   const [notes, setNotes] = useState('');
   const [gpsLoading, setGpsLoading] = useState(false);
+    // 🔌 LEER MARCAS: Extrae la información y la lista de marcas de este día seleccionado
+  const dayData = dateStr ? (entries[dateStr] || null) : null;
+  const marcasDelDia = (dayData as any)?.marcas || [];
+
 
   useEffect(() => {
     if (isOpen && dateStr) {
       const existingEntry = entries[dateStr];
       if (existingEntry) {
-        const [sh, sm] = existingEntry.startTime.split(':');
-        const [eh, em] = existingEntry.endTime.split(':');
-        setStartH(sh || '08');
-        setStartM(sm || '00');
-        setEndH(eh || '17');
-        setEndM(em || '00');
-        setIsHoliday(existingEntry.isHolidayOrSunday);
+        // Si el día ya tiene datos, cargamos su estado real de Firebase
+        setIsHoliday(!!existingEntry.isHolidayOrSunday);
         setNotes(existingEntry.notes || '');
       } else {
-        setStartH('08');
-        setStartM('00');
-        setEndH('17');
-        setEndM('00');
+        // Si el día está completamente vacío, por defecto el switch arranca apagado
+        // y calculamos automáticamente si ese dateStr cae un día Domingo (0)
         const isSunday = new Date(dateStr + 'T00:00:00').getDay() === 0;
         setIsHoliday(isSunday);
         setNotes('');
@@ -53,51 +50,94 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
     }
   }, [isOpen, dateStr, entries]);
 
-  // Guarda de salida: SIEMPRE después de declarar todos los hooks, nunca antes.
-  // Así el número y orden de hooks es idéntico en cada render y React no rompe
-  // su consistencia interna ("Expected static flag was missing").
+
+
   if (!dateStr) return null;
 
-  const captureCurrentLocation = (): Promise<any> => {
+  /*
+  const captureCurrentLocation = async () => {
     return new Promise((resolve) => {
-      if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        resolve(null);
-        return;
+      if (Platform.OS === 'web') {
+        if (!navigator.geolocation) {
+          resolve(null);
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            // ÉXITO: Entrega las coordenadas reales en cuanto el satélite se conecte
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              timestamp: position.timestamp,
+              accuracy: position.coords.accuracy,
+            });
+          },
+          (error) => {
+            console.error("Error capturando GPS en vivo:", error);
+            // ALERTA / RESPUESTA ANTE ERROR: Si falla o tarda, le damos una segunda oportunidad instantánea
+            navigator.geolocation.getCurrentPosition(
+              (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, timestamp: pos.timestamp, accuracy: pos.coords.accuracy }),
+              () => resolve(null),
+              { enableHighAccuracy: false, timeout: 3000 }
+            );
+          },
+          { 
+            enableHighAccuracy: true, // Exigimos máxima precisión para la nómina
+            timeout: 8000,            // Le damos hasta 8 segundos a los equipos nuevos para conectarse
+            maximumAge: 0             // Forzamos a que no use coordenadas viejas de la memoria
+          }
+        );
+      } else {
+        // EN EL EMULADOR / CELULAR NATIVO: Usa Expo Location
+        const { getCurrentPositionAsync, Accuracy } = require('expo-location');
+        getCurrentPositionAsync({ accuracy: Accuracy.Balanced })
+          .then((loc: any) => resolve({ latitude: loc.coords.latitude, longitude: loc.coords.longitude, timestamp: loc.timestamp, accuracy: loc.coords.accuracy }))
+          .catch(() => resolve(null));
       }
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: parseFloat(position.coords.latitude.toFixed(5)),
-            longitude: parseFloat(position.coords.longitude.toFixed(5)),
-            accuracy: position.coords.accuracy,
-            timestamp: position.timestamp
-          });
-        },
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
     });
   };
+  */
+
 
   const handleSave = async () => {
+    if (!dateStr) return;
     setGpsLoading(true);
-    const coords = await captureCurrentLocation();
 
-    const startTimeFormatted = `${startH}:${startM}`;
-    const endTimeFormatted = `${endH}:${endM}`;
+    try {
+      // 1. Jalamos con total seguridad el registro actual directamente de tu estado 'entries'
+      const existingEntry = (entries as any)[dateStr] || {};
+      
+      // 2. Extraemos las horas y las marcas que ya calculó el botón gigante para no perderlas
+      const horasReales = existingEntry.hours !== undefined ? existingEntry.hours : 0;
+      const marcasReales = existingEntry.marcas || [];
 
-    await saveDayEntry({
-      date: dateStr,
-      startTime: startTimeFormatted,
-      endTime: endTimeFormatted,
-      isHolidayOrSunday: isHoliday,
-      notes: notes.trim() ? notes : undefined,
-      location: coords || undefined
-    } as any);
+      // 3. CONSERVACIÓN ABSOLUTA: Armamos el paquete asegurando que las horas y las marcas se mantengan intactas
+      const updatedPayload = {
+        ...existingEntry,          // Hereda los campos base (userId, yearMonth, etc.)
+        date: dateStr,
+        hours: horasReales,        // ⏱️ ¡OBLIGATORIO! Mantiene el acumulado real de las fracciones
+        marcas: marcasReales,      // 🕒 ¡OBLIGATORIO! Protege la lista de ponchadas para que no se borren
+        isHolidayOrSunday: isHoliday,
+        notes: notes.trim() ? notes : null,
+      };
 
-    setGpsLoading(false);
-    onClose();
+      // 4. Mandamos el paquete purificado a tu función nativa de Firebase
+      await saveDayEntry(updatedPayload as any);
+
+      alert('¡Hoja de ruta actualizada con éxito, mi rey! 🌟');
+      onClose();
+
+    } catch (error) {
+      console.error("Error al guardar cambios de auditoría:", error);
+      alert('No se pudieron salvar los cambios. Revisa tu red.');
+    } finally {
+      setGpsLoading(false);
+    }
   };
+
+
+
 
   const handleDelete = async () => {
     await deleteDayEntry(dateStr);
@@ -113,6 +153,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
 
   const hasExistingData = !!entries[dateStr];
 
+  /*
     // Disparador nativo para el reloj de Entrada en Android
   const showStartTimePicker = () => {
     DateTimePickerAndroid.open({
@@ -148,7 +189,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
       is24Hour: true,
     });
   };
-
+*/
 
   return (
     <Modal visible={isOpen} animationType="slide" transparent={true} onRequestClose={onClose}>
@@ -173,71 +214,56 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
             </View>
 
             
-            {/* SECCIÓN SELECTORES DOBLES UNIVERSALES OPTIMIZADOS */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
-              
-              {/* Bloque Selector Hora Entrada */}
-              <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={{ fontSize: 13, color: '#8d99ae', marginBottom: 8, fontWeight: '500' }}>Hora Entrada</Text>
-                {Platform.OS === 'web' ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <select 
-                      value={startH} 
-                      onChange={(e) => setStartH(e.target.value)} 
-                      style={{ flex: 1, backgroundColor: '#1c2541', color: '#ffffff', padding: '14px 0px', borderRadius: '12px', fontSize: '16px', border: '1px solid rgba(58, 79, 124, 0.4)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', textAlign: 'center', textAlignLast: 'center' as any }}
-                    >
-                      {hoursOptions.map((h) => <option key={`sh-${h}`} value={h} style={{ backgroundColor: '#0b132b' }}>{h}</option>)}
-                    </select>
-                    <Text style={{ color: '#3a4f7c', fontWeight: '700', fontSize: 18 }}>:</Text>
-                    <select 
-                      value={startM} 
-                      onChange={(e) => setStartM(e.target.value)} 
-                      style={{ flex: 1, backgroundColor: '#1c2541', color: '#ffffff', padding: '14px 0px', borderRadius: '12px', fontSize: '16px', border: '1px solid rgba(58, 79, 124, 0.4)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', textAlign: 'center', textAlignLast: 'center' as any }}
-                    >
-                      {minutesOptions.map((m) => <option key={`sm-${m}`} value={m} style={{ backgroundColor: '#0b132b' }}>{m}</option>)}
-                    </select>
-                  </View>
-                ) : (
+            {/* 🕒 PANEL DE AUDITORÍA: Línea de tiempo real con GPS */}
+            <Text style={{ fontSize: 13, color: '#8d99ae', marginBottom: 10, fontWeight: '700', letterSpacing: 0.5 }}>
+              FRACCIONES DE JORNADA REGISTRADAS
+            </Text>
+
+            {marcasDelDia.length === 0 ? (
+              <View style={{ backgroundColor: '#1c254130', padding: 20, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: '#3a4f7c15', marginBottom: 20 }}>
+                <Text style={{ color: '#4f5d75', fontSize: 13, fontStyle: 'italic', textAlign: 'center' }}>
+                  No se encontraron marcas automáticas registradas en este día.
+                </Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: '#1c254140', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#3a4f7c15', marginBottom: 20, gap: 10 }}>
+                {marcasDelDia.map((punch: any, idx: number) => {
+                  const esEntrada = punch.tipo === 'ENTRADA';
+                  const esManual = punch.tipo === 'MANUAL';
+                  const horaConSegundos = punch.hora ? punch.hora.toLowerCase() : '';
                   
-                  // EN CELULARES: ¡Ahora es un botón táctil real que despierta al reloj nativo!
-                  <TouchableOpacity onPress={showStartTimePicker} activeOpacity={0.7} style={{ backgroundColor: '#1c2541', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c40', alignItems: 'center', width: '100%' }}>
-                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>{startH}:{startM}</Text>
-                  </TouchableOpacity>
-
-                )}
+                  return (
+                    <View key={punch.id || idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#11193660', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c10' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ 
+                          paddingHorizontal: 8, 
+                          paddingVertical: 3, 
+                          borderRadius: 6, 
+                          backgroundColor: esManual ? 'rgba(58, 134, 255, 0.08)' : esEntrada ? 'rgba(0, 245, 212, 0.08)' : 'rgba(255, 0, 127, 0.08)', 
+                          borderWidth: 1, 
+                          borderColor: esManual ? 'rgba(58, 134, 255, 0.2)' : esEntrada ? 'rgba(0, 245, 212, 0.2)' : 'rgba(255, 0, 127, 0.2)' 
+                        }}>
+                          <Text style={{ color: esManual ? '#3a86ff' : esEntrada ? '#00f5d4' : '#ff007f', fontSize: 9, fontWeight: '800' }}>
+                            {punch.tipo}
+                          </Text>
+                        </View>
+                        {/* Imprime la hora con la precisión exacta de segundos en el modal */}
+                        <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] }}>
+                          {horaConSegundos}
+                        </Text>
+                      </View>
+                      
+                      {!esManual && punch.latitude && (
+                        <Text style={{ color: '#4f5d75', fontSize: 11 }}>
+                          📍 Precisión: {punch.accuracy ? `${Math.round(punch.accuracy)}m` : 'OK'}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
+            )}
 
-              {/* Bloque Selector Hora Salida */}
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={{ fontSize: 13, color: '#8d99ae', marginBottom: 8, fontWeight: '500' }}>Hora Salida</Text>
-                {Platform.OS === 'web' ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <select 
-                      value={endH} 
-                      onChange={(e) => setEndH(e.target.value)} 
-                      style={{ flex: 1, backgroundColor: '#1c2541', color: '#ffffff', padding: '14px 0px', borderRadius: '12px', fontSize: '16px', border: '1px solid rgba(58, 79, 124, 0.4)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', textAlign: 'center', textAlignLast: 'center' as any }}
-                    >
-                      {hoursOptions.map((h) => <option key={`eh-${h}`} value={h} style={{ backgroundColor: '#0b132b' }}>{h}</option>)}
-                    </select>
-                    <Text style={{ color: '#3a4f7c', fontWeight: '700', fontSize: 18 }}>:</Text>
-                    <select 
-                      value={endM} 
-                      onChange={(e) => setEndM(e.target.value)} 
-                      style={{ flex: 1, backgroundColor: '#1c2541', color: '#ffffff', padding: '14px 0px', borderRadius: '12px', fontSize: '16px', border: '1px solid rgba(58, 79, 124, 0.4)', outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', textAlign: 'center', textAlignLast: 'center' as any }}
-                    >
-                      {minutesOptions.map((m) => <option key={`em-${m}`} value={m} style={{ backgroundColor: '#0b132b' }}>{m}</option>)}
-                    </select>
-                  </View>
-                ) : (
-                  // EN CELULARES: Botón táctil para el reloj de salida ordinaria
-                  <TouchableOpacity onPress={showEndTimePicker} activeOpacity={0.7} style={{ backgroundColor: '#1c2541', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3a4f7c40', alignItems: 'center', width: '100%' }}>
-                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>{endH}:{endM}</Text>
-                  </TouchableOpacity>
-
-                )}
-              </View>
-
-            </View>
 
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1c2541', padding: 14, borderRadius: 14, marginBottom: 20, borderWidth: 1, borderColor: '#3a4f7c20' }}>
@@ -289,6 +315,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
   );
 };
 
+/*
 const styles = StyleSheet.create({
   pickerContainer: {
     flex: 1,
@@ -321,5 +348,5 @@ const styles = StyleSheet.create({
   }
 });
 
-
+*/
 

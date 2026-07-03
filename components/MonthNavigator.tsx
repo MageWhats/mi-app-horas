@@ -1,10 +1,8 @@
 // components/MonthNavigator.tsx
-import { signOut } from 'firebase/auth';
 import React from 'react';
-import { Platform, Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { useWorkHours } from '../context/WorkHoursContext';
  // @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
-import { auth } from '../lib/firebase';
 
 
 import { TabBarIcon } from './TabBarIcon'; // Sistema de iconos vectoriales SVG
@@ -13,6 +11,7 @@ export const MonthNavigator: React.FC = () => {
   const { currentDate, goToPrevMonth, goToNextMonth } = useWorkHours();
   const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
+  /*
   // Función para desconectar al usuario de la nube de Google
   const handleSignOut = async () => {
     try {
@@ -26,7 +25,7 @@ export const MonthNavigator: React.FC = () => {
       console.error("Error al cerrar sesión: ", error);
     }
   };
-
+*/
 
   return (
         // Cambiamos paddingVertical a 6 para pegar el mes a las tarjetas

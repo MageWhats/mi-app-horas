@@ -1,8 +1,9 @@
 // context/WorkHoursContext.tsx
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
+//@ts-ignore
 import { auth, db } from '../lib/firebase';
 import { calculateMonthlySummary } from '../lib/utils';
 import { DayEntry, MonthlySummary } from '../types/hours';
@@ -18,15 +19,21 @@ interface WorkHoursContextType {
   saveDayEntry: (entryData: DayEntry) => Promise<void>;
   deleteDayEntry: (dateStr: string) => Promise<void>;
   exportCurrentMonthToCSV: () => Promise<void>;
+  punchInRealTime: (tipoMarca: 'ENTRADA' | 'SALIDA', coords: any) => Promise<any>;
+  globalSeconds: number;
+  setGlobalSeconds: (seconds: number) => void;
+
+
 }
 
-const WorkHoursContext = createContext<WorkHoursContextType | undefined>(undefined);
+export const WorkHoursContext = createContext<WorkHoursContextType | undefined>(undefined);
 
 export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [entries, setEntries] = useState<Record<string, DayEntry>>({});
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [loading, setLoading] = useState<boolean>(true);
+  const [globalSeconds, setGlobalSeconds] = useState(0);
   const [summary, setSummary] = useState<MonthlySummary>({
     totalHours: 0,
     totalHoursWithRecargo: 0,
@@ -42,7 +49,10 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // 1. ESCUCHA DE AUTENTICACIÓN: Detecta si hay un usuario activo
   useEffect(() => {
+
+    //@ts-ignore
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+
       setUser(currentUser);
       if (!currentUser) {
         setEntries({});
@@ -51,6 +61,68 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
     return unsubscribeAuth;
   }, []);
+
+
+   // ⏱️ MOTOR DE TIEMPO ULTRA-POTENTE: Sincroniza y fuerza el conteo de segundos en vivo
+  useEffect(() => {
+    // 1. Forzamos la captura exacta del día de hoy en formato local AAAA-MM-DD
+    const nowTime = new Date();
+    const offsetMin = nowTime.getTimezoneOffset();
+    const localDateObj = new Date(nowTime.getTime() - (offsetMin * 60 * 1000));
+    const todayStr = localDateObj.toISOString().split('T')[0];
+    
+    const todayData = (entries as any)[todayStr] || null;
+    const todayPunches = todayData?.marcas || [];
+    
+    let interval: any = null;
+
+    if (todayPunches.length > 0) {
+      const ultimaMarca = todayPunches[todayPunches.length - 1];
+      
+      // 🚨 CONTROL ESTRICTO: Si la última marca registrada en la nube es una ENTRADA
+      if (ultimaMarca && ultimaMarca.tipo === 'ENTRADA') {
+        
+        const calcularSegundosMaster = () => {
+          // Intentamos leer el timestamp digital de auditoría
+          let startTimeMs = ultimaMarca.timestamp ? new Date(ultimaMarca.timestamp).getTime() : 0;
+          
+          // RESPALDO DE SEGURIDAD SENIOR: Si el timestamp no es válido o da NaN, calculamos usando la hora de la marca
+          if (!startTimeMs || isNaN(startTimeMs)) {
+            const [horaStr, periodo] = ultimaMarca.hora.split(' ');
+            let [hrs, mins, secs] = horaStr.split(':').map(Number);
+            if (isNaN(secs)) secs = 0;
+            
+            if (periodo && periodo.toLowerCase().includes('p') && hrs < 12) hrs += 12;
+            if (periodo && periodo.toLowerCase().includes('a') && hrs === 12) hrs = 0;
+            
+            const baseDate = new Date();
+            baseDate.setHours(hrs, mins, secs, 0);
+            startTimeMs = baseDate.getTime();
+          }
+
+          const diffSegundos = Math.floor((Date.now() - startTimeMs) / 1000);
+          
+          // Forzamos al estado a tomar el conteo real en vivo (mínimo 1 segundo si está activo)
+          setGlobalSeconds(diffSegundos > 0 ? diffSegundos : 1);
+        };
+        
+        // Ejecutamos de inmediato e iniciamos el conteo en tiempo real
+        calcularSegundosMaster();
+        interval = setInterval(calcularSegundosMaster, 1000);
+        
+      } else {
+        setGlobalSeconds(0); // Si ponchó salida, el reloj se apaga solo
+      }
+    } else {
+      setGlobalSeconds(0);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [entries]);
+
+
 
   // 2. ESCUCHA EN TIEMPO REAL DE FIRESTORE: Trae los datos de la nube de Google
   useEffect(() => {
@@ -78,7 +150,8 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           isHolidayOrSunday: data.isHolidayOrSunday,
           notes: data.notes,
           location: data.location, // Aquí cargamos las coordenadas GPS guardadas
-        };
+          marcas: data.marcas || [],
+        }as any;
       });
       setEntries(fetchedEntries);
       setLoading(false);
@@ -108,24 +181,170 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // 4. GUARDAR EN LA NUBE REAL DE FIRESTORE CON GPS
   const saveDayEntry = async (entryData: DayEntry) => {
     if (!user) return;
-    const { calculateHoursAndNightSplit } = require('../lib/utils');
-    const { totalHours, nightHours } = calculateHoursAndNightSplit(entryData.startTime, entryData.endTime);
-    const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-    const docId = `${user.uid}_${entryData.date}`;
 
-    await setDoc(doc(db, 'work_entries', docId), {
-      userId: user.uid,
-      yearMonth,
-      date: entryData.date,
-      startTime: entryData.startTime,
-      endTime: entryData.endTime,
-      hours: totalHours,
-      nightHours: nightHours,
-      isHolidayOrSunday: entryData.isHolidayOrSunday,
-      notes: entryData.notes || null,
-      location: entryData.location || null, // Guardamos la latitud y longitud en Firebase
-    });
+    try {
+      const { doc, getDoc, setDoc } = require('firebase/firestore');
+      const docId = `${user.uid}_${entryData.date}`;
+      const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+      // 1. Consultamos el documento actual en Firebase para ver si el botón circular ya guardó marcas u horas reales
+      const dayDocRef = doc(db, 'work_entries', docId);
+      const dayDocSnap = await getDoc(dayDocRef);
+
+      let marcasExistentes = [];
+      let horasExistentes = 0;
+      let startTimeExistente = entryData.startTime || '';
+      let endTimeExistente = entryData.endTime || '';
+      let locationExistente = entryData.location || null;
+
+      if (dayDocSnap.exists()) {
+        const dbData = dayDocSnap.data();
+        marcasExistentes = dbData.marcas || [];
+        horasExistentes = dbData.hours || 0;
+        startTimeExistente = dbData.startTime || startTimeExistente;
+        endTimeExistente = dbData.endTime || endTimeExistente;
+        locationExistente = dbData.location || locationExistente;
+      }
+
+      // 2. DETECTOR DE ORIGEN: Si el modal no envía marcas nuevas ni horas manuales,
+      // obligamos al sistema a retener y respetar las marcas y horas que ya calculó el botón gigante
+      const marcasFinales = (entryData as any).marcas && (entryData as any).marcas.length > 0 
+        ? (entryData as any).marcas 
+        : marcasExistentes;
+
+      let totalHours = horasExistentes;
+      let nightHours = 0;
+
+      // 3. Solo si el modal viene con horas manuales explícitas (el flujo viejo o el nuevo +hoy), calcula de forma tradicional
+      if (entryData.startTime && entryData.endTime) {
+        const { calculateHoursAndNightSplit } = require('../lib/utils'); // Ajusta la ruta a tu utils.ts si es necesario
+        const splitResult = calculateHoursAndNightSplit(entryData.startTime, entryData.endTime);
+        totalHours = splitResult.totalHours;
+        nightHours = splitResult.nightHours;
+      }
+
+      // 4. Armamos el paquete unificado simétrico definitivo
+      const payload = {
+        userId: user.uid,
+        yearMonth,
+        date: entryData.date,
+        startTime: startTimeExistente,
+        endTime: endTimeExistente,
+        hours: totalHours, // ⏱️ ¡BLINDADO! Retiene las horas del GPS real
+        nightHours,
+        isHolidayOrSunday: entryData.isHolidayOrSunday,
+        notes: entryData.notes || null,
+        location: locationExistente,
+        marcas: marcasFinales // 🕒 ¡BLINDADO! Protege la lista de ponchadas en el calendario
+      };
+
+      // Guardamos fusionando datos de forma inteligente
+      await setDoc(dayDocRef, payload, { merge: true });
+
+      // Actualizamos tu estado de React en caliente para que el calendario se pinte al instante
+      if (typeof setEntries === 'function') {
+        setEntries((prev: any) => ({ ...prev, [entryData.date]: payload }));
+      }
+
+    } catch (error) {
+      console.error("Error crítico en saveDayEntry:", error);
+    }
   };
+
+
+    // 🔘 FUNCIÓN MAESTRA: Poncha entrada/salida en tiempo real usando tu misma estructura exacta de Firestore
+  const punchInRealTime = async (tipoMarca: 'ENTRADA' | 'SALIDA', coords: any) => {
+    try {
+      if (!user) return false;
+
+      const { doc, getDoc, setDoc } = require('firebase/firestore');
+      
+      // 1. Capturamos la fecha de hoy exacta en formato de texto 'AAAA-MM-DD'
+      //const todayStr = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const offset = now.getTimezoneOffset();
+      const localDate = new Date(now.getTime() - (offset * 60 * 1000));
+      const todayStr = localDate.toISOString().split('T')[0];
+      const horaStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+      // 2. REPLICA DE RUTA: Tu misma fórmula exacta para armar el ID del archivo
+      const docId = `${user.uid}_${todayStr}`;
+      const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+      // Apuntamos exactamente a tu colección 'work_entries' con tu docId
+      const dayDocRef = doc(db, 'work_entries', docId);
+      const dayDocSnap = await getDoc(dayDocRef);
+
+      let marcasExistentes = [];
+      let currentNotes = null;
+      let currentIsHoliday = false;
+      let currentStartTime = '';
+      let currentEndTime = '';
+
+      if (dayDocSnap.exists()) {
+        const data = dayDocSnap.data();
+        marcasExistentes = data.marcas || [];
+        currentNotes = data.notes || null;
+        currentIsHoliday = data.isHolidayOrSunday || false;
+        currentStartTime = data.startTime || '';
+        currentEndTime = data.endTime || '';
+      }
+
+      // 3. Creamos el nuevo sello digital de auditoría con la geolocalización
+      const nuevaMarca = {
+        id: `${tipoMarca.toLowerCase()}-${Date.now()}`,
+        tipo: tipoMarca,
+        hora: horaStr,
+        latitude: coords?.latitude || null,
+        longitude: coords?.longitude || null,
+        accuracy: coords?.accuracy || null,
+        timestamp: now.toISOString()
+      };
+
+      const listaActualizada = [...marcasExistentes, nuevaMarca];
+
+      // 4. Calculadora automática de horas acumuladas en el día basándose en los tramos
+      let totalHorasDia = 0;
+      for (let i = 0; i < listaActualizada.length; i++) {
+        if (listaActualizada[i].tipo === 'ENTRADA' && listaActualizada[i + 1]?.tipo === 'SALIDA') {
+          const t1 = new Date(listaActualizada[i].timestamp).getTime();
+          const t2 = new Date(listaActualizada[i + 1].timestamp).getTime();
+          totalHorasDia += (t2 - t1) / (1000 * 60 * 60); // Convierte milisegundos a horas decimales
+        }
+      }
+
+      // 5. Armamos el paquete unificado replicando todos tus campos nativos de la imagen
+      const payload = {
+        userId: user.uid,
+        yearMonth,
+        date: todayStr,
+        startTime: currentStartTime,
+        endTime: currentEndTime,
+        hours: parseFloat(totalHorasDia.toFixed(2)),
+        nightHours: 0, // El dashboard web se encargará de liquidar los recargos nocturnos
+        isHolidayOrSunday: currentIsHoliday,
+        notes: currentNotes,
+        location: coords ? { latitude: coords.latitude, longitude: coords.longitude } : null,
+        marcas: listaActualizada // Guardamos la lista de fracciones de jornada
+      };
+
+      // Guardamos aplicando merge: true para asegurar que sume sin pisar datos del modal
+      await setDoc(dayDocRef, payload, { merge: true });
+
+      // Actualizamos tu estado de React local para que el calendario se pinte de una vez en pantalla
+      if (typeof setEntries === 'function') {
+        setEntries((prev: any) => ({ ...prev, [todayStr]: payload }));
+      }
+
+      return { status: 'SUCCESS', estadoActual: tipoMarca === 'ENTRADA' ? 'LABORANDO' : 'FUERA' };
+
+    } catch (error) {
+      console.error("Error en el ponchador de tiempo real:", error);
+      alert('No se pudo registrar la marca en la nube. Revisa tu red.');
+      return false;
+    }
+  };
+
 
   // 5. ELIMINAR JORNADA DE LA NUBE
   const deleteDayEntry = async (dateStr: string) => {
@@ -180,7 +399,7 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   return (
-    <WorkHoursContext.Provider value={{ entries, currentDate, summary, loading, user, goToPrevMonth, goToNextMonth, saveDayEntry, deleteDayEntry, exportCurrentMonthToCSV }}>
+    <WorkHoursContext.Provider value={{ entries, currentDate, summary, loading, user, goToPrevMonth, goToNextMonth, saveDayEntry, deleteDayEntry, exportCurrentMonthToCSV,punchInRealTime, globalSeconds, setGlobalSeconds  }}>
       {children}
     </WorkHoursContext.Provider>
   );
