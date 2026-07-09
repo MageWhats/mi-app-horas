@@ -184,12 +184,14 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     try {
       const { doc, getDoc, setDoc } = require('firebase/firestore');
-      const docId = `${user.uid}_${entryData.date}`;
-      const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    // Línea 187: Extraemos el año y mes de la fecha que el operario seleccionó en el formulario
+    const [year, month] = entryData.date.split('-');
+    const currentYearMonth = `${year}-${month}`; // Ej: '2026-07'
 
-      // 1. Consultamos el documento actual en Firebase para ver si el botón circular ya guardó marcas u horas reales
-      const dayDocRef = doc(db, 'work_entries', docId);
-      const dayDocSnap = await getDoc(dayDocRef);
+    // Línea 191: Apuntamos al documento único mensual de 'work_months'
+    const monthDocRef = doc(db, 'work_months', `${user.uid}_${currentYearMonth}`);
+    const dayDocSnap = await getDoc(monthDocRef); // Cambiado dayDocRef por monthDocRef
+
 
       let marcasExistentes = [];
       let horasExistentes = 0;
@@ -197,85 +199,132 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       let endTimeExistente = entryData.endTime || '';
       let locationExistente = entryData.location || null;
 
-      if (dayDocSnap.exists()) {
-        const dbData = dayDocSnap.data();
-        marcasExistentes = dbData.marcas || [];
-        horasExistentes = dbData.hours || 0;
-        startTimeExistente = dbData.startTime || startTimeExistente;
-        endTimeExistente = dbData.endTime || endTimeExistente;
-        locationExistente = dbData.location || locationExistente;
-      }
+    if (dayDocSnap.exists()) {
+      const data = dayDocSnap.data();
+      const diasMap = data.dias || {};
+      const dbData = diasMap[entryData.date] || {}; // Buscamos la fecha seleccionada
 
-      // 2. DETECTOR DE ORIGEN: Si el modal no envía marcas nuevas ni horas manuales,
-      // obligamos al sistema a retener y respetar las marcas y horas que ya calculó el botón gigante
-      const marcasFinales = (entryData as any).marcas && (entryData as any).marcas.length > 0 
-        ? (entryData as any).marcas 
-        : marcasExistentes;
+      marcasExistentes = dbData.marcas || [];
+      horasExistentes = dbData.totalHours || 0; // Cambiado .hours por .totalHours
+      startTimeExistente = dbData.startTime || startTimeExistente;
+      endTimeExistente = dbData.endTime || endTimeExistente;
+      locationExistente = dbData.location || locationExistente;
+    }
+
+
+     
+    // 2. DETECTOR DE ORIGEN: Evaluamos si el formulario envía horas explícitas
+    let marcasFinales = marcasExistentes;
+    
+    if (entryData.startTime && entryData.endTime) {
+      const horaLegible = `${entryData.startTime} - ${entryData.endTime}`;
+      marcasFinales = [
+        {
+          id: `manual-${Date.now()}`,
+          tipo: 'MANUAL',
+          horaIngreso: entryData.startTime.trim(), // 🛡️ ¡Sueltas y separadas por fin!
+          horaSalida: entryData.endTime.trim(),   // 🛡️ ¡Sueltas y separadas por fin!
+          hora: horaLegible, // Respaldamos el texto completo para no romper la visual actual
+          zona: 'Registro Manual'
+        }
+      ];
+    } else if ((entryData as any).marcas && (entryData as any).marcas.length > 0) {
+      marcasFinales = (entryData as any).marcas;
+    }
+
 
       let totalHours = horasExistentes;
       let nightHours = 0;
 
       // // 3. Solo si el modal viene con horas manuales explícitas (Línea 219)
     if (entryData.startTime && entryData.endTime) {
-      // 🛡️ LIMPIADOR QUIRÚRGICO: Convierte cualquier formato de Android ("5:00 p. m.") o Web a minutos puros
-      const limpiarYConvertirAMinutos = (horaTexto: string) => {
-        let texto = horaTexto.toLowerCase().replace(/\./g, '').trim(); // Quita los puntos de "a. m." -> "am"
-        let esPM = texto.includes('pm') || texto.includes('p m');
-        let esAM = texto.includes('am') || texto.includes('a m');
-        
-        let numeros = texto.replace(/(am|pm|a\s*m|p\s*m)/g, '').trim();
-        const [hrsStr, minsStr] = numeros.split(':');
-        
-        let horas = parseInt(hrsStr, 10) || 0;
-        let minutos = parseInt(minsStr, 10) || 0;
-        
-        if (esPM && horas < 12) horas += 12;
-        if (esAM && horas === 12) horas = 0;
-        
-        return horas * 60 + minutos;
-      };
-
-      try {
-        const minInicio = limpiarYConvertirAMinutos(entryData.startTime);
-        const minFin = limpiarYConvertirAMinutos(entryData.endTime);
-        let diff = minFin - minInicio;
-        
-        if (diff < 0) diff += 24 * 60; // Por si el turno cruza la medianoche
-        
-        totalHours = parseFloat((diff / 60).toFixed(2));
-      } catch (err) {
-        // Respaldo clásico si el formateador falla
-        const { calculateHoursAndNightSplit } = require('../lib/utils');
-        const splitResult = calculateHoursAndNightSplit(entryData.startTime, entryData.endTime);
-        totalHours = splitResult.totalHours;
-        nightHours = splitResult.nightHours;
+    // 🛡️ PROCESADOR UNIVERSAL COLOMBIANO: Convierte Web (24h) o Android (AM/PM) a minutos del día
+    const normalizarAMinutos = (horaTexto: string) => {
+      let texto = horaTexto.toLowerCase().replace(/\./g, '').trim(); // Quita puntos: "a. m." -> "am"
+      let esPM = texto.includes('pm') || texto.includes('p m');
+      let esAM = texto.includes('am') || texto.includes('a m');
+      
+      let soloNumeros = texto.replace(/(am|pm|a\s*m|p\s*m)/g, '').trim();
+      const [hrsStr, minsStr] = soloNumeros.split(':');
+      
+      let horas = parseInt(hrsStr, 10) || 0;
+      let minutos = parseInt(minsStr, 10) || 0;
+      
+      if (!esPM && !esAM) {
+        return horas * 60 + minutos; // Si ya viene en formato 24h desde la Web
       }
+      
+      if (esPM && horas < 12) horas += 12;
+      if (esAM && horas === 12) horas = 0;
+      
+      return horas * 60 + minutos;
+    };
+
+    try {
+      const minInicio = normalizarAMinutos(entryData.startTime);
+      const minFin = normalizarAMinutos(entryData.endTime);
+      
+      let diffMinutos = minFin - minInicio;
+      if (diffMinutos < 0) diffMinutos += 24 * 60; // Control por si cruza la medianoche
+      
+      totalHours = parseFloat((diffMinutos / 60).toFixed(2));
+
+      // 🧮 LIQUIDADOR DE RECARGOS NOCTURNOS (9:00 p. m. a 6:00 a. m. -> 1260 min a 360 min)
+      let conteoNocturnoMin = 0;
+      let momentoActual = minInicio;
+
+      for (let m = 0; m < diffMinutos; m++) {
+        let minutoDelDia = momentoActual % (24 * 60);
+        if (minutoDelDia >= 1260 || minutoDelDia < 360) {
+          conteoNocturnoMin++;
+        }
+        momentoActual++;
+      }
+      
+      nightHours = parseFloat((conteoNocturnoMin / 60).toFixed(2));
+
+    } catch (err) {
+      console.error("Error en cálculo manual unificado:", err);
+      const { calculateHoursAndNightSplit } = require('../lib/utils');
+      const splitResult = calculateHoursAndNightSplit(entryData.startTime, entryData.endTime);
+      totalHours = splitResult.totalHours;
+      nightHours = splitResult.nightHours;
     }
 
-      // 4. Armamos el paquete unificado simétrico definitivo
-      const payload = {
-        userId: user.uid,
-        yearMonth,
-        date: entryData.date,
-        startTime: startTimeExistente,
-        endTime: endTimeExistente,
-        hours: totalHours, // ⏱️ ¡BLINDADO! Retiene las horas del GPS real
-        nightHours,
-        isHolidayOrSunday: entryData.isHolidayOrSunday,
-        notes: entryData.notes || null,
-        location: locationExistente,
-        marcas: marcasFinales // 🕒 ¡BLINDADO! Protege la lista de ponchadas en el calendario
-      };
+    }
 
-      // Guardamos fusionando datos de forma inteligente
-      await setDoc(dayDocRef, payload, { merge: true });
+    // 4. Armamos la estructura del día actual indexada para el mapa mensual
+    const diaEstructurado = {
+      date: entryData.date,
+      totalHours: totalHours, // El valor matemático que procesó tu limpiador de arriba
+      nightHours: nightHours > 0 ? nightHours : 0,
+      isHolidayOrSunday: entryData.isHolidayOrSunday,
+      notes: entryData.notes || null,
+      marcas: marcasFinales
+    };
 
-      // Actualizamos tu estado de React en caliente para que el calendario se pinte al instante
-      if (typeof setEntries === 'function') {
-        setEntries((prev: any) => ({ ...prev, [entryData.date]: payload }));
-      }
+    // Descargamos el mapa total actual de la nube para fusionar el día de forma segura
+    let mapaDiasFinal = {};
+    if (dayDocSnap.exists()) {
+      mapaDiasFinal = dayDocSnap.data().dias || {};
+    }
+    // Añadimos o pisamos el día editado en el mapa de memoria
+    //@ts-ignore
+    mapaDiasFinal[entryData.date] = diaEstructurado;
 
-    } catch (error) {
+    // Guardamos aplicando merge: true en la nueva colección 'work_months'
+    await setDoc(monthDocRef, {
+      userId: user.uid,
+      yearMonth: currentYearMonth,
+      updatedAt: new Date().toISOString(),
+      dias: mapaDiasFinal
+    }, { merge: true });
+
+    // Actualizamos tu estado de React en caliente para pintar el calendario al instante
+    if (typeof setEntries === 'function') {
+      setEntries(mapaDiasFinal);
+    }
+     }catch (error) {
       console.error("Error crítico en saveDayEntry:", error);
     }
   };
@@ -288,36 +337,37 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       const { doc, getDoc, setDoc } = require('firebase/firestore');
       
-      // 1. Capturamos la fecha de hoy exacta en formato de texto 'AAAA-MM-DD'
-      //const todayStr = new Date().toISOString().split('T')[0];
       const now = new Date();
       const offset = now.getTimezoneOffset();
       const localDate = new Date(now.getTime() - (offset * 60 * 1000));
       const todayStr = localDate.toISOString().split('T')[0];
       const horaStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 
-      // 2. REPLICA DE RUTA: Tu misma fórmula exacta para armar el ID del archivo
-      const docId = `${user.uid}_${todayStr}`;
-      const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      const [year, month] = todayStr.split('-');
+      const currentYearMonth = `${year}-${month}`; 
 
-      // Apuntamos exactamente a tu colección 'work_entries' con tu docId
-      const dayDocRef = doc(db, 'work_entries', docId);
-      const dayDocSnap = await getDoc(dayDocRef);
+      const monthDocRef = doc(db, 'work_months', `${user.uid}_${currentYearMonth}`);
+      const dayDocSnap = await getDoc(monthDocRef); // Cambiado dayDocRef por monthDocRef
 
-      let marcasExistentes = [];
-      let currentNotes = null;
-      let currentIsHoliday = false;
-      let currentStartTime = '';
-      let currentEndTime = '';
+    let marcasExistentes: any[] = [];
+    let currentNotes: string | null = null;
+    let currentIsHoliday = false;
+    let currentHours = 0;
 
-      if (dayDocSnap.exists()) {
-        const data = dayDocSnap.data();
-        marcasExistentes = data.marcas || [];
-        currentNotes = data.notes || null;
-        currentIsHoliday = data.isHolidayOrSunday || false;
-        currentStartTime = data.startTime || '';
-        currentEndTime = data.endTime || '';
+    if (dayDocSnap.exists()) {
+      const data = dayDocSnap.data();
+      const diasMap = data.dias || {};
+      
+      // 🛡️ REPARACIÓN QUIRÚRGICA: Si el día ya tiene datos, extraemos la info real con un respaldo limpio
+      if (diasMap && diasMap[todayStr]) {
+        const dayDataExistente = diasMap[todayStr];
+        marcasExistentes = Array.isArray(dayDataExistente.marcas) ? dayDataExistente.marcas : [];
+        currentNotes = dayDataExistente.notes || null;
+        currentIsHoliday = dayDataExistente.isHolidayOrSunday || false;
+        currentHours = dayDataExistente.totalHours || dayDataExistente.hours || 0;
       }
+    }
+
 
       // 3. Creamos el nuevo sello digital de auditoría con la geolocalización
       const nuevaMarca = {
@@ -334,46 +384,51 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       // 4. Calculadora automática de horas acumuladas en el día basándose en los tramos
       let totalHorasDia = 0;
-      for (let i = 0; i < listaActualizada.length; i++) {
+      for (let i = 0; i < listaActualizada.length; i += 2) {
+
         if (listaActualizada[i].tipo === 'ENTRADA' && listaActualizada[i + 1]?.tipo === 'SALIDA') {
           const t1 = new Date(listaActualizada[i].timestamp).getTime();
           const t2 = new Date(listaActualizada[i + 1].timestamp).getTime();
           totalHorasDia += (t2 - t1) / (1000 * 60 * 60); // Convierte milisegundos a horas decimales
         }
-      }
-
-      // 5. Armamos el paquete unificado replicando todos tus campos nativos de la imagen
-      const payload = {
-        userId: user.uid,
-        yearMonth,
-        date: todayStr,
-        startTime: currentStartTime,
-        endTime: currentEndTime,
-        hours: parseFloat(totalHorasDia.toFixed(2)),
-        nightHours: 0, // El dashboard web se encargará de liquidar los recargos nocturnos
-        isHolidayOrSunday: currentIsHoliday,
-        notes: currentNotes,
-        location: coords ? { latitude: coords.latitude, longitude: coords.longitude } : null,
-        marcas: listaActualizada // Guardamos la lista de fracciones de jornada
+      } 
+          // 5. Armamos la estructura del día actual para indexarla en el mapa
+      const diaEstructurado = {
+      date: todayStr,
+      totalHours: parseFloat(totalHorasDia.toFixed(4)), // Conserva precisión de segundos
+      nightHours: 0,
+      isHolidayOrSunday: currentIsHoliday,
+      notes: currentNotes,
+      marcas: listaActualizada
       };
 
-      // Guardamos aplicando merge: true para asegurar que sume sin pisar datos del modal
-      await setDoc(dayDocRef, payload, { merge: true });
-
-      // Actualizamos tu estado de React local para que el calendario se pinte de una vez en pantalla
-      if (typeof setEntries === 'function') {
-        setEntries((prev: any) => ({ ...prev, [todayStr]: payload }));
+      // Obtenemos el mapa existente del documento para hacer el merge de forma segura por software
+      let mapaDiasFinal = {};
+      if (dayDocSnap.exists()) {
+      mapaDiasFinal = dayDocSnap.data().dias || {};
       }
+      // Inyectamos o actualizamos el día de hoy dentro del mapa global
+      //@ts-ignore
+      mapaDiasFinal[todayStr] = diaEstructurado;
 
-      return { status: 'SUCCESS', estadoActual: tipoMarca === 'ENTRADA' ? 'LABORANDO' : 'FUERA' };
+      // Guardamos aplicando merge: true en la colección principal 'work_months'
+      await setDoc(monthDocRef, {
+      userId: user.uid,
+      yearMonth: currentYearMonth,
+      updatedAt: now.toISOString(),
+      dias: mapaDiasFinal
+      }, { merge: true });
 
-    } catch (error) {
-      console.error("Error en el ponchador de tiempo real:", error);
-      alert('No se pudo registrar la marca en la nube. Revisa tu red.');
-      return false;
+      // Actualizamos tu estado de React local para que el calendario se pinte de una vez
+      if (typeof setEntries === 'function') {
+        setEntries(mapaDiasFinal); // Pasamos el mapa completo de días al calendario
+      }
+    } catch (error) { // 🛡️ ¡AQUÍ! Esta es la llave '}' que faltaba para cerrar el try de arriba
+    console.error("Error en el ponchador de tiempo real:", error);
+    alert('No se pudo registrar la marca en la nube. Revisa tu red.');
+    return false;
     }
   };
-
 
   // 5. ELIMINAR JORNADA DE LA NUBE
   const deleteDayEntry = async (dateStr: string) => {
