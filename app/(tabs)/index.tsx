@@ -70,7 +70,11 @@ export default function RegisterScreen() {
 
   const renderDayItem = ({ item: dayStr }: { item: string }) => {
     const dayData = (entries[dayStr] || null) as any;
-    const isToday = dayStr === new Date().toISOString().split('T')[0];
+    const nowToday = new Date();
+    const offsetToday = nowToday.getTimezoneOffset();
+    const localDateObj = new Date(nowToday.getTime() - (offsetToday * 60 * 1000));
+    const isToday = dayStr === localDateObj.toISOString().split('T')[0];
+
     
     const marcasDelDia = dayData?.marcas && Array.isArray(dayData.marcas) ? dayData.marcas : [];
     const isCompletado = !!(dayData?.notes || dayData?.isHolidayOrSunday);
@@ -174,11 +178,23 @@ export default function RegisterScreen() {
           </View>
 
           {/* ⏱️ COLUMNA DERECHA FIJA: Cápsula inteligente multi-escala */}
-          {marcasDelDia.length > 0 || (dayData?.hours && dayData.hours > 0) && (
+
+          {marcasDelDia.length > 0 /*|| (dayData?.hours && dayData.hours > 0)*/ && (
            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          {dayData?.location && (
-              <View style={{ backgroundColor: 'rgba(0, 245, 212, 0.1)', paddingHorizontal: 10,paddingVertical: 12.2, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0, 245, 212, 0.2)',minWidth: 40,  alignItems: 'center', justifyContent: 'center' }}>
-                <TabBarIcon name="map" size={20} color="#00f5d4" />
+                 {(dayData?.location || marcasDelDia.some((m: any) => m.tipo === 'MANUAL')) && (
+
+              <View style={{
+                backgroundColor: dayData?.location ? 'rgba(0, 245, 212, 0.1)' : 'rgba(141, 153, 174, 0.1)',
+                paddingHorizontal: 10,
+                paddingVertical: 12.2,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: dayData?.location ? 'rgba(0, 245, 212, 0.2)' : 'rgba(141, 153, 174, 0.2)',
+                minWidth: 30, 
+                alignItems: 'center',
+                justifyContent: 'center' }}>
+
+                <TabBarIcon name="map" size={20} color={dayData?.location ? "#00f5d4" : "#8d99ae"} />
               </View>
             )}
             <View style={{ 

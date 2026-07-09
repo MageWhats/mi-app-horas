@@ -19,11 +19,12 @@ const minutesOptions = Array.from({ length: 60 }, (_, i) => String(i).padStart(2
 
 export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClose, dateStr }) => {
   const { entries, saveDayEntry, deleteDayEntry } = useWorkHours();
-
+/*
   const [startH, setStartH] = useState('08');
   const [startM, setStartM] = useState('00');
   const [endH, setEndH] = useState('17');
   const [endM, setEndM] = useState('00');
+*/
 
   const [isHoliday, setIsHoliday] = useState(false);
   const [notes, setNotes] = useState('');
@@ -97,7 +98,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
       }
     });
   };
-  */
+*/  
 
 
   const handleSave = async () => {

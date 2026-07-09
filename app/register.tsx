@@ -1,21 +1,16 @@
 // app/register.tsx
 import { Link, useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { AdvancedRegister } from '../components/AdvancedRegister';
 import { ScreenContainer } from '../components/ScreenContainer';
-// @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
-import { auth } from '../lib/firebase'; // Sincronizado con tu ruta de utilidades
+
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage] = useState<string | null>(null);
 
+ /*
   const handleRegister = async () => {
     // Validaciones básicas antes de enviar datos a Google
     if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
@@ -63,6 +58,7 @@ export default function RegisterScreen() {
       setLoading(false);
     }
   };
+*/
 
   return (
     <ScreenContainer>

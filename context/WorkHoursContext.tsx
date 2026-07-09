@@ -215,13 +215,42 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       let totalHours = horasExistentes;
       let nightHours = 0;
 
-      // 3. Solo si el modal viene con horas manuales explícitas (el flujo viejo o el nuevo +hoy), calcula de forma tradicional
-      if (entryData.startTime && entryData.endTime) {
-        const { calculateHoursAndNightSplit } = require('../lib/utils'); // Ajusta la ruta a tu utils.ts si es necesario
+      // // 3. Solo si el modal viene con horas manuales explícitas (Línea 219)
+    if (entryData.startTime && entryData.endTime) {
+      // 🛡️ LIMPIADOR QUIRÚRGICO: Convierte cualquier formato de Android ("5:00 p. m.") o Web a minutos puros
+      const limpiarYConvertirAMinutos = (horaTexto: string) => {
+        let texto = horaTexto.toLowerCase().replace(/\./g, '').trim(); // Quita los puntos de "a. m." -> "am"
+        let esPM = texto.includes('pm') || texto.includes('p m');
+        let esAM = texto.includes('am') || texto.includes('a m');
+        
+        let numeros = texto.replace(/(am|pm|a\s*m|p\s*m)/g, '').trim();
+        const [hrsStr, minsStr] = numeros.split(':');
+        
+        let horas = parseInt(hrsStr, 10) || 0;
+        let minutos = parseInt(minsStr, 10) || 0;
+        
+        if (esPM && horas < 12) horas += 12;
+        if (esAM && horas === 12) horas = 0;
+        
+        return horas * 60 + minutos;
+      };
+
+      try {
+        const minInicio = limpiarYConvertirAMinutos(entryData.startTime);
+        const minFin = limpiarYConvertirAMinutos(entryData.endTime);
+        let diff = minFin - minInicio;
+        
+        if (diff < 0) diff += 24 * 60; // Por si el turno cruza la medianoche
+        
+        totalHours = parseFloat((diff / 60).toFixed(2));
+      } catch (err) {
+        // Respaldo clásico si el formateador falla
+        const { calculateHoursAndNightSplit } = require('../lib/utils');
         const splitResult = calculateHoursAndNightSplit(entryData.startTime, entryData.endTime);
         totalHours = splitResult.totalHours;
         nightHours = splitResult.nightHours;
       }
+    }
 
       // 4. Armamos el paquete unificado simétrico definitivo
       const payload = {

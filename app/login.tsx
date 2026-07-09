@@ -1,20 +1,16 @@
 // app/login.tsx
 import { useRouter } from 'expo-router';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { SmartLogin } from '../components/SmartLogin';
- // @ts-ignore - Apaga temporalmente el chequeo estricto para esta línea en el emulador
-import { auth } from '../lib/firebase'; // Sincronizado con tu ruta de utilidades
+
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage] = useState<string | null>(null);
 
+  /*
   const handleLogin = async () => {
     // Validaciones básicas de entrada
     if (!email.trim() || !password.trim()) {
@@ -46,6 +42,7 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
+*/
 
   return (
     <ScreenContainer>
