@@ -11,20 +11,10 @@ interface HoursInputModalProps {
   dateStr: string | null;
 }
 
-/*
-// Opciones de Horas (00-23) y Minutos (00-59)
-const hoursOptions = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-const minutesOptions = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
-*/
 
 export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClose, dateStr }) => {
   const { entries, saveDayEntry, deleteDayEntry } = useWorkHours();
-/*
-  const [startH, setStartH] = useState('08');
-  const [startM, setStartM] = useState('00');
-  const [endH, setEndH] = useState('17');
-  const [endM, setEndM] = useState('00');
-*/
+
 
   const [isHoliday, setIsHoliday] = useState(false);
   const [notes, setNotes] = useState('');
@@ -54,51 +44,6 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
 
 
   if (!dateStr) return null;
-
-  /*
-  const captureCurrentLocation = async () => {
-    return new Promise((resolve) => {
-      if (Platform.OS === 'web') {
-        if (!navigator.geolocation) {
-          resolve(null);
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            // ÉXITO: Entrega las coordenadas reales en cuanto el satélite se conecte
-            resolve({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              timestamp: position.timestamp,
-              accuracy: position.coords.accuracy,
-            });
-          },
-          (error) => {
-            console.error("Error capturando GPS en vivo:", error);
-            // ALERTA / RESPUESTA ANTE ERROR: Si falla o tarda, le damos una segunda oportunidad instantánea
-            navigator.geolocation.getCurrentPosition(
-              (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, timestamp: pos.timestamp, accuracy: pos.coords.accuracy }),
-              () => resolve(null),
-              { enableHighAccuracy: false, timeout: 3000 }
-            );
-          },
-          { 
-            enableHighAccuracy: true, // Exigimos máxima precisión para la nómina
-            timeout: 8000,            // Le damos hasta 8 segundos a los equipos nuevos para conectarse
-            maximumAge: 0             // Forzamos a que no use coordenadas viejas de la memoria
-          }
-        );
-      } else {
-        // EN EL EMULADOR / CELULAR NATIVO: Usa Expo Location
-        const { getCurrentPositionAsync, Accuracy } = require('expo-location');
-        getCurrentPositionAsync({ accuracy: Accuracy.Balanced })
-          .then((loc: any) => resolve({ latitude: loc.coords.latitude, longitude: loc.coords.longitude, timestamp: loc.timestamp, accuracy: loc.coords.accuracy }))
-          .catch(() => resolve(null));
-      }
-    });
-  };
-*/  
 
 
   const handleSave = async () => {
@@ -154,43 +99,6 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
 
   const hasExistingData = !!entries[dateStr];
 
-  /*
-    // Disparador nativo para el reloj de Entrada en Android
-  const showStartTimePicker = () => {
-    DateTimePickerAndroid.open({
-      value: new Date(new Date().setHours(Number(startH), Number(startM))),
-            onValueChange: (event: any, selectedDate: any) => {
-
-        if (selectedDate) {
-          const hours = String(selectedDate.getHours()).padStart(2, '0');
-          const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
-          setStartH(hours);
-          setStartM(minutes);
-        }
-      },
-      mode: 'time',
-      is24Hour: true,
-    });
-  };
-
-  // Disparador nativo para el reloj de Salida en Android
-  const showEndTimePicker = () => {
-    DateTimePickerAndroid.open({
-      value: new Date(new Date().setHours(Number(endH), Number(endM))),
-            onValueChange: (event: any, selectedDate: any) => {
-
-        if (selectedDate) {
-          const hours = String(selectedDate.getHours()).padStart(2, '0');
-          const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
-          setEndH(hours);
-          setEndM(minutes);
-        }
-      },
-      mode: 'time',
-      is24Hour: true,
-    });
-  };
-*/
 
   return (
     <Modal visible={isOpen} animationType="slide" transparent={true} onRequestClose={onClose}>
@@ -316,38 +224,5 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
   );
 };
 
-/*
-const styles = StyleSheet.create({
-  pickerContainer: {
-    flex: 1,
-    backgroundColor: '#1c2541',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(58, 79, 124, 0.4)',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    height: 50,
-  },
-  picker: {
-    width: '100%',
-    color: '#ffffff',
-    backgroundColor: '#1c2541', // Forzamos el fondo azul oscuro marino en el selector
-    fontSize: 16,
-    ...Platform.select({
-      web: {
-        outline: 'none',
-        border: 'none',
-        padding: '0px',
-        cursor: 'pointer',
-        textAlign: 'center',
-        textAlignLast: 'center', // ¡CLAVE UNIVERSAL! Fuerza al navegador web a centrar el número seleccionado
-        appearance: 'none', // Remueve las flechas nativas feas para limpiar el diseño
-        WebkitAppearance: 'none',
-        MozAppearance: 'none',
-      } as any
-    })
-  }
-});
 
-*/
 

@@ -181,21 +181,28 @@ export default function RegisterScreen() {
 
           {marcasDelDia.length > 0 /*|| (dayData?.hours && dayData.hours > 0)*/ && (
            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                 {(dayData?.location || marcasDelDia.some((m: any) => m.tipo === 'MANUAL')) && (
+                 {/* Activamos el mapa si alguna marca real tiene coordenadas GPS registradas O si es un registro manual */}
+              {(marcasDelDia.some((m: any) => m.latitude !== undefined && m.latitude !== null) || marcasDelDia.some((m: any) => m.tipo === 'MANUAL')) && (
 
-              <View style={{
-                backgroundColor: dayData?.location ? 'rgba(0, 245, 212, 0.1)' : 'rgba(141, 153, 174, 0.1)',
-                paddingHorizontal: 10,
-                paddingVertical: 12.2,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: dayData?.location ? 'rgba(0, 245, 212, 0.2)' : 'rgba(141, 153, 174, 0.2)',
-                minWidth: 30, 
-                alignItems: 'center',
-                justifyContent: 'center' }}>
+                  <View style={{
+                    // Si alguna marca tiene latitud, asumimos que fue ponchado con GPS (Color Verde/Celeste)
+                    backgroundColor: marcasDelDia.some((m: any) => m.latitude) ? 'rgba(0, 245, 212, 0.1)' : 'rgba(141, 153, 174, 0.1)',
+                    paddingHorizontal: 10,
+                    paddingVertical: 12.2,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: marcasDelDia.some((m: any) => m.latitude) ? 'rgba(0, 245, 212, 0.2)' : 'rgba(141, 153, 174, 0.2)',
+                    minWidth: 30,
+                    alignItems: 'center',
+                    justifyContent: 'center' }}>
 
-                <TabBarIcon name="map" size={20} color={dayData?.location ? "#00f5d4" : "#8d99ae"} />
-              </View>
+                    <TabBarIcon 
+                      name="map" 
+                      size={20} 
+                      color={marcasDelDia.some((m: any) => m.latitude) ? "#00f5d4" : "#8d99ae"} 
+                    />
+                  </View>
+
             )}
             <View style={{ 
               backgroundColor: 'rgba(0, 245, 212, 0.1)', 

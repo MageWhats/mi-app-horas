@@ -42,7 +42,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
 
   const handleSaveManual = async () => {
     if (!selectedDay) {
-      alert('⚠️ Por favor selecciona el día que vas a registrar, mi rey.');
+      alert('⚠️ Por favor selecciona el día que vas a registrar.');
       return;
     }
     if (!startHour || !endHour) {
