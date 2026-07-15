@@ -2,7 +2,7 @@
 import ExcelJS from 'exceljs';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { User } from 'firebase/auth';
 import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
@@ -17,6 +17,7 @@ interface WorkHoursContextType {
   summary: MonthlySummary;
   loading: boolean;
   user: User | null;
+  userRole: 'admin' | 'employee' | null;
   goToPrevMonth: () => void;
   goToNextMonth: () => void;
   saveDayEntry: (entryData: DayEntry) => Promise<void>;
@@ -33,6 +34,7 @@ export const WorkHoursContext = createContext<WorkHoursContextType | undefined>(
 
 export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'employee' | null>(null);
   const [entries, setEntries] = useState<Record<string, DayEntry>>({});
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [loading, setLoading] = useState<boolean>(true);
@@ -50,20 +52,49 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     totalHorasExtras: 0,
   });
 
-  // 1. ESCUCHA DE AUTENTICACIÓN: Detecta si hay un usuario activo
+  // 🔐 ESCUDO DE AUTENTICACIÓN Y ROLES: Monitorea la sesión y el tipo de cuenta en Firestore
   useEffect(() => {
+    const { onAuthStateChanged } = require('firebase/auth');
+    const { collection, query, where, getDocs } = require('firebase/firestore');
 
     //@ts-ignore
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser: any) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
 
-      setUser(currentUser);
-      if (!currentUser) {
+        try {
+          // 🛡️ BÚSQUEDA GERENCIAL POR CAMPO INTERNO: Localiza el documento usando la propiedad uid
+          const q = query(collection(db, 'users'), where('uid', '==', firebaseUser.uid));
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            // Tomamos el primer documento coincidente de la lista
+            const userDocDoc = querySnapshot.docs[0];
+            const userData = userDocDoc.data();
+
+            // Guardamos el rol real ('admin' o 'employee')
+            setUserRole(userData.role || 'employee');
+          } else {
+            setUserRole('employee'); // Respaldo si no encuentra ninguna cédula con ese UID
+          }
+        } catch (error) {
+          console.error("Error al obtener el rol del usuario desde Firestore:", error);
+          setUserRole('employee');
+        }
+
+      } else {
+        setUser(null);
+        setUserRole(null); // Limpieza absoluta al cerrar sesión
         setEntries({});
-        setLoading(false);
       }
+      setLoading(false);
     });
-    return unsubscribeAuth;
+
+    return () => {
+      if (typeof unsubscribeAuth === 'function') unsubscribeAuth();
+    };
   }, []);
+
 
 
   // ⏱️ MOTOR DE TIEMPO ULTRA-POTENTE: Sincroniza y fuerza el conteo de segundos en vivo
@@ -129,53 +160,53 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // 2. ESCUCHA EN TIEMPO REAL DE FIRESTORE: Trae los datos de la nube de Google
   // // 2. ESCUCHA EN TIEMPO REAL DESDE LA COLECCIÓN UNIFICADA 'work_months'
-useEffect(() => {
-  if (!user) return;
+  useEffect(() => {
+    if (!user) return;
 
-  setLoading(true);
-  
-  // Calculamos el año y mes en formato AAAA-MM (Ej: "2026-07")
-  const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-  
-  // Apuntamos al documento del mes en curso para el usuario autenticado
-  const q = query(
-    collection(db, 'work_months'),
-    where('userId', '==', user.uid),
-    where('yearMonth', '==', yearMonth)
-  );
+    setLoading(true);
 
-  const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-    let fetchedEntries: Record<string, any> = {};
+    // Calculamos el año y mes en formato AAAA-MM (Ej: "2026-07")
+    const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
 
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      
-      // Si el documento contiene el mapa global de días, lo procesamos
-      if (data.dias) {
-        Object.keys(data.dias).forEach((fechaKey) => {
-          const diaData = data.dias[fechaKey];
-          
-          // 🔥 HOMOLOGACIÓN DE SEGURIDAD:
-          // Si en la base de datos se llama 'totalHours', le creamos la propiedad 'hours' 
-          // para que tu Excel y tus pantallas sigan leyendo sin romper nada.
-          fetchedEntries[fechaKey] = {
-            ...diaData,
-            hours: diaData.hours !== undefined ? diaData.hours : (diaData.totalHours || 0)
-          };
-        });
-      }
+    // Apuntamos al documento del mes en curso para el usuario autenticado
+    const q = query(
+      collection(db, 'work_months'),
+      where('userId', '==', user.uid),
+      where('yearMonth', '==', yearMonth)
+    );
+
+    const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
+      let fetchedEntries: Record<string, any> = {};
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+
+        // Si el documento contiene el mapa global de días, lo procesamos
+        if (data.dias) {
+          Object.keys(data.dias).forEach((fechaKey) => {
+            const diaData = data.dias[fechaKey];
+
+            // 🔥 HOMOLOGACIÓN DE SEGURIDAD:
+            // Si en la base de datos se llama 'totalHours', le creamos la propiedad 'hours' 
+            // para que tu Excel y tus pantallas sigan leyendo sin romper nada.
+            fetchedEntries[fechaKey] = {
+              ...diaData,
+              hours: diaData.hours !== undefined ? diaData.hours : (diaData.totalHours || 0)
+            };
+          });
+        }
+      });
+
+      // Inyectamos el mapa consolidado al estado local para pintar el calendario de una vez
+      setEntries(fetchedEntries);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error en la escucha en tiempo real de work_months:", error);
+      setLoading(false);
     });
 
-    // Inyectamos el mapa consolidado al estado local para pintar el calendario de una vez
-    setEntries(fetchedEntries);
-    setLoading(false);
-  }, (error) => {
-    console.error("Error en la escucha en tiempo real de work_months:", error);
-    setLoading(false);
-  });
-
-  return unsubscribeSnapshot;
-}, [user, currentDate]);
+    return unsubscribeSnapshot;
+  }, [user, currentDate]);
 
   // 3. RE-CALCULAR ESTADÍSTICAS AUTOMÁTICAS
   useEffect(() => {
@@ -303,9 +334,9 @@ useEffect(() => {
           const splitResult = calculateHoursAndNightSplit(entryData.startTime, entryData.endTime);
           totalHours = splitResult.totalHours;
           nightHours = splitResult.nightHours;
-          
+
         }
-          // 🚀 PONLO AQUÍ (FUERA DEL CATCH):
+        // 🚀 PONLO AQUÍ (FUERA DEL CATCH):
         console.log("=== DEBUG JORNADA MANUAL ===");
         console.log("Total horas finales que van a subirse:", totalHours);
         console.log("Horas nocturnas finales que van a subirse:", nightHours);
@@ -340,33 +371,33 @@ useEffect(() => {
         dias: mapaDiasFinal
       }, { merge: true });
 
-    // // Actualizamos tu estado de React en caliente mapeando los tipos de forma segura
-    if (typeof setEntries === 'function') {
-      const mapaHomologado: Record<string, any> = {};
+      // // Actualizamos tu estado de React en caliente mapeando los tipos de forma segura
+      if (typeof setEntries === 'function') {
+        const mapaHomologado: Record<string, any> = {};
 
-      // Recorremos cada día del mapa para asegurarnos de que la interfaz reciba números limpios
-      Object.keys(mapaDiasFinal).forEach((fechaKey) => {
-        //@ts-ignore
-        const diaOriginal = mapaDiasFinal[fechaKey];
-        
-        mapaHomologado[fechaKey] = {
-          ...diaOriginal,
-          // 🔥 1. Forzamos la propiedad 'hours' convirtiendo cualquier string de toFixed a número real
-          hours: diaOriginal.hours !== undefined 
-            ? Number(diaOriginal.hours) 
-            : Number(diaOriginal.totalHours || 0),
-          
-          // 🔥 2. Aseguramos que los recargos nocturnos también viajen como números puros
-          nightHours: Number(diaOriginal.nightHours || 0),
-          extraDiaria: Number(diaOriginal.extraDiaria || 0),
-          marcas: diaOriginal.marcas || []
-        };
-      });
+        // Recorremos cada día del mapa para asegurarnos de que la interfaz reciba números limpios
+        Object.keys(mapaDiasFinal).forEach((fechaKey) => {
+          //@ts-ignore
+          const diaOriginal = mapaDiasFinal[fechaKey];
 
-      // Seteamos el estado con el mapa completamente limpio y homologado
-      setEntries(mapaHomologado);
-    }
-  } catch (error) {
+          mapaHomologado[fechaKey] = {
+            ...diaOriginal,
+            // 🔥 1. Forzamos la propiedad 'hours' convirtiendo cualquier string de toFixed a número real
+            hours: diaOriginal.hours !== undefined
+              ? Number(diaOriginal.hours)
+              : Number(diaOriginal.totalHours || 0),
+
+            // 🔥 2. Aseguramos que los recargos nocturnos también viajen como números puros
+            nightHours: Number(diaOriginal.nightHours || 0),
+            extraDiaria: Number(diaOriginal.extraDiaria || 0),
+            marcas: diaOriginal.marcas || []
+          };
+        });
+
+        // Seteamos el estado con el mapa completamente limpio y homologado
+        setEntries(mapaHomologado);
+      }
+    } catch (error) {
 
       console.error("Error crítico en saveDayEntry:", error);
     }
@@ -462,49 +493,49 @@ useEffect(() => {
         dias: mapaDiasFinal
       }, { merge: true });
 
-    // // Actualizamos tu estado de React local de forma segura y homologada para evitar el 1s y el 0h
-    if (typeof setEntries === 'function') {
-      const mapaHomologado: Record<string, any> = {};
+      // // Actualizamos tu estado de React local de forma segura y homologada para evitar el 1s y el 0h
+      if (typeof setEntries === 'function') {
+        const mapaHomologado: Record<string, any> = {};
 
-      Object.keys(mapaDiasFinal).forEach((fechaKey) => {
-        //@ts-ignore
-        const diaOriginal = mapaDiasFinal[fechaKey];
-        
-        // Convertimos los valores a números reales
-        const totalHorasCalculadas = diaOriginal.hours !== undefined 
-          ? Number(diaOriginal.hours) 
-          : Number(diaOriginal.totalHours || 0);
+        Object.keys(mapaDiasFinal).forEach((fechaKey) => {
+          //@ts-ignore
+          const diaOriginal = mapaDiasFinal[fechaKey];
 
-        // 🔥 CÁLCULO DE RESPALDO PARA EL RECARGO NOCTURNO EN CALIENTE:
-        // Si el día original marca 0 pero tiene horas totales, evaluamos si podemos estimar un recargo 
-        // para que la interfaz visual no se caiga a 0h ni a 1s antes de recargar.
-        let horasNocturnasSeguras = Number(diaOriginal.nightHours || 0);
-        
-        // Si es el día de hoy y se acaba de ponchar una salida nocturna, asignamos un estimado visual
-        if (fechaKey === todayStr && tipoMarca === 'SALIDA' && horasNocturnasSeguras === 0) {
-          const horaActualSistemas = new Date().getHours();
-          // Si el ponchado ocurre entre las 9:00 PM (21) y las 6:00 AM
-          if (horaActualSistemas >= 21 || horaActualSistemas < 6) {
-            horasNocturnasSeguras = 1.0; // Seteamos 1h de contingencia visual para proteger el render
+          // Convertimos los valores a números reales
+          const totalHorasCalculadas = diaOriginal.hours !== undefined
+            ? Number(diaOriginal.hours)
+            : Number(diaOriginal.totalHours || 0);
+
+          // 🔥 CÁLCULO DE RESPALDO PARA EL RECARGO NOCTURNO EN CALIENTE:
+          // Si el día original marca 0 pero tiene horas totales, evaluamos si podemos estimar un recargo 
+          // para que la interfaz visual no se caiga a 0h ni a 1s antes de recargar.
+          let horasNocturnasSeguras = Number(diaOriginal.nightHours || 0);
+
+          // Si es el día de hoy y se acaba de ponchar una salida nocturna, asignamos un estimado visual
+          if (fechaKey === todayStr && tipoMarca === 'SALIDA' && horasNocturnasSeguras === 0) {
+            const horaActualSistemas = new Date().getHours();
+            // Si el ponchado ocurre entre las 9:00 PM (21) y las 6:00 AM
+            if (horaActualSistemas >= 21 || horaActualSistemas < 6) {
+              horasNocturnasSeguras = 1.0; // Seteamos 1h de contingencia visual para proteger el render
+            }
           }
-        }
 
-        mapaHomologado[fechaKey] = {
-          ...diaOriginal,
-          // 🔥 1. Forzamos la propiedad 'hours' numérica indispensable para el resumen superior
-          hours: totalHorasCalculadas,
-          // 🔥 2. Aseguramos que viaje un número puro en los recargos para erradicar el '1s'
-          nightHours: horasNocturnasSeguras,
-          extraDiaria: Number(diaOriginal.extraDiaria || 0),
-          marcas: diaOriginal.marcas || []
-        };
-      });
+          mapaHomologado[fechaKey] = {
+            ...diaOriginal,
+            // 🔥 1. Forzamos la propiedad 'hours' numérica indispensable para el resumen superior
+            hours: totalHorasCalculadas,
+            // 🔥 2. Aseguramos que viaje un número puro en los recargos para erradicar el '1s'
+            nightHours: horasNocturnasSeguras,
+            extraDiaria: Number(diaOriginal.extraDiaria || 0),
+            marcas: diaOriginal.marcas || []
+          };
+        });
 
-      // Seteamos el estado local con la estructura limpia
-      setEntries(mapaHomologado);
-    }
+        // Seteamos el estado local con la estructura limpia
+        setEntries(mapaHomologado);
+      }
 
-    return true; // Conserva el retorno de tu función maestra
+      return true; // Conserva el retorno de tu función maestra
 
     } catch (error) { // 🛡️ ¡AQUÍ! Esta es la llave '}' que faltaba para cerrar el try de arriba
       console.error("Error en el ponchador de tiempo real:", error);
@@ -520,92 +551,92 @@ useEffect(() => {
     await deleteDoc(doc(db, 'work_entries', docId));
   };
 
-const exportCurrentMonthToCSV = async () => {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Reporte Laboral', {
-    views: [{ showGridLines: true }] // Mantiene la cuadrícula visible
-  });
-
-  const monthsLabels = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  //const currentMonthLabel = monthsLabels[currentDate.getMonth()];
-  const filename = `Reporte_Horas_${currentDate.getFullYear()}_${currentDate.getMonth() + 1}.xlsx`;
-
-  // --- 1. CONFIGURACIÓN DE COLUMNAS PRINCIPALES (ANCHO DE CELDA) ---
-  worksheet.columns = [
-    { header: 'FECHA', key: 'fecha', width: 14 },
-    { header: 'HORA ENTRADA', key: 'entrada', width: 16 },
-    { header: 'HORA SALIDA', key: 'salida', width: 16 },
-    { header: 'HORAS REALES', key: 'reales', width: 18 },
-    { header: 'HORAS NOCTURNAS', key: 'nocturnas', width: 22 },
-    { header: 'HORAS EXTRAS (T. 7.5h)', key: 'extras', width: 22 },
-    { header: '¿FESTIVO / DOMINGO?', key: 'festivo', width: 24 },
-    { header: 'NOTAS / NOVEDADES', key: 'notas', width: 35 },
-  ];
-
-  // --- 2. ESTILAR ENCABEZADOS DE LA TABLA (AZUL OSCURO CORPORATIVO) ---
-  const headerRow = worksheet.getRow(1);
-  headerRow.height = 28;
-  headerRow.eachCell((cell) => {
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.alignment = { vertical: 'middle', horizontal: 'center' };
-  });
-
-  // --- 3. PROCESAR E INYECTAR LAS FILAS DIARIAS CON EFECTO CEBRA AZUL ---
-  const detailRows = Object.values(entries);
-  
-  detailRows.forEach((entry: any, index) => {
-    const hoursNum = Number(entry.hours || 0);
-    const extraDiaria = hoursNum > 7.5 ? hoursNum - 7.5 : 0;
-
-    const row = worksheet.addRow({
-      fecha: entry.date,
-      entrada: entry.startTime || '',
-      salida: entry.endTime || '',
-      reales: hoursNum, // Guardado como número puro para permitir operaciones matemáticas
-      nocturnas: Number(entry.nightHours || 0),
-      extras: Number(extraDiaria.toFixed(1)),
-      festivo: entry.isHolidayOrSunday ? 'SÍ' : 'NO',
-      notas: entry.notes || 'Sin novedades'
+  const exportCurrentMonthToCSV = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Reporte Laboral', {
+      views: [{ showGridLines: true }] // Mantiene la cuadrícula visible
     });
 
-    row.height = 22;
+    //const monthsLabels = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    //const currentMonthLabel = monthsLabels[currentDate.getMonth()];
+    const filename = `Reporte_Horas_${currentDate.getFullYear()}_${currentDate.getMonth() + 1}.xlsx`;
 
-    // Efecto Cebra: Filas pares con un fondo azul sutil, impares blancas
-    const esPar = index % 2 === 0;
-    const colorFila = esPar ? 'FFF0F4F8' : 'FFFFFFFF'; 
+    // --- 1. CONFIGURACIÓN DE COLUMNAS PRINCIPALES (ANCHO DE CELDA) ---
+    worksheet.columns = [
+      { header: 'FECHA', key: 'fecha', width: 14 },
+      { header: 'HORA ENTRADA', key: 'entrada', width: 16 },
+      { header: 'HORA SALIDA', key: 'salida', width: 16 },
+      { header: 'HORAS REALES', key: 'reales', width: 18 },
+      { header: 'HORAS NOCTURNAS', key: 'nocturnas', width: 22 },
+      { header: 'HORAS EXTRAS (T. 7.5h)', key: 'extras', width: 22 },
+      { header: '¿FESTIVO / DOMINGO?', key: 'festivo', width: 24 },
+      { header: 'NOTAS / NOVEDADES', key: 'notas', width: 35 },
+    ];
 
-    row.eachCell((cell) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorFila } };
-      cell.border = {
-        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        top: { style: 'thin', color: { argb: 'FFCBD5E1' } }
-      };
+    // --- 2. ESTILAR ENCABEZADOS DE LA TABLA (AZUL OSCURO CORPORATIVO) ---
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 28;
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
       cell.alignment = { vertical: 'middle', horizontal: 'center' };
     });
-  });
 
-  // --- 4. SECCIÓN DE RESUMEN METRICAS (COLUMNAS J, K, L) ---
-  // Dejamos la columna I vacía como espacio de separación visual
-  worksheet.getCell('J1').value = 'MÉTRICA LABORAL';
-  worksheet.getCell('K1').value = 'VALOR';
-  worksheet.getCell('L1').value = 'DESCRIPCIÓN';
+    // --- 3. PROCESAR E INYECTAR LAS FILAS DIARIAS CON EFECTO CEBRA AZUL ---
+    const detailRows = Object.values(entries);
 
-  // Configurar anchos de la tabla de resumen
-  worksheet.getColumn('J').width = 28;
-  worksheet.getColumn('K').width = 14;
-  worksheet.getColumn('L').width = 30;
+    detailRows.forEach((entry: any, index) => {
+      const hoursNum = Number(entry.hours || 0);
+      const extraDiaria = hoursNum > 7.5 ? hoursNum - 7.5 : 0;
 
-  // Estilo de encabezados del Resumen (Azul Rey Premium)
-  ['J1', 'K1', 'L1'].forEach(cellRef => {
-    const cell = worksheet.getCell(cellRef);
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
-    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.alignment = { vertical: 'middle', horizontal: 'center' };
-  });
+      const row = worksheet.addRow({
+        fecha: entry.date,
+        entrada: entry.startTime || '',
+        salida: entry.endTime || '',
+        reales: hoursNum, // Guardado como número puro para permitir operaciones matemáticas
+        nocturnas: Number(entry.nightHours || 0),
+        extras: Number(extraDiaria.toFixed(1)),
+        festivo: entry.isHolidayOrSunday ? 'SÍ' : 'NO',
+        notas: entry.notes || 'Sin novedades'
+      });
 
-      // 🇨🇴 PROCESADOR MAESTRO DE LA LEY 2101 EN COLOMBIA
-      const horasBaseMes = (() => {
+      row.height = 22;
+
+      // Efecto Cebra: Filas pares con un fondo azul sutil, impares blancas
+      const esPar = index % 2 === 0;
+      const colorFila = esPar ? 'FFF0F4F8' : 'FFFFFFFF';
+
+      row.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorFila } };
+        cell.border = {
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          top: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
+    });
+
+    // --- 4. SECCIÓN DE RESUMEN METRICAS (COLUMNAS J, K, L) ---
+    // Dejamos la columna I vacía como espacio de separación visual
+    worksheet.getCell('J1').value = 'MÉTRICA LABORAL';
+    worksheet.getCell('K1').value = 'VALOR';
+    worksheet.getCell('L1').value = 'DESCRIPCIÓN';
+
+    // Configurar anchos de la tabla de resumen
+    worksheet.getColumn('J').width = 28;
+    worksheet.getColumn('K').width = 14;
+    worksheet.getColumn('L').width = 30;
+
+    // Estilo de encabezados del Resumen (Azul Rey Premium)
+    ['J1', 'K1', 'L1'].forEach(cellRef => {
+      const cell = worksheet.getCell(cellRef);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+      cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    // 🇨🇴 PROCESADOR MAESTRO DE LA LEY 2101 EN COLOMBIA
+    const horasBaseMes = (() => {
       const [anoStr, mesStr] = currentDate.toISOString().split('T')[0].split('-');
       const anoNum = parseInt(anoStr, 10);
       const mesNum = parseInt(mesStr, 10);
@@ -614,62 +645,97 @@ const exportCurrentMonthToCSV = async () => {
       if (anoNum < 2026 || (anoNum === 2026 && mesNum < 7)) {
         return 220;
       }
-      
+
       // A partir de Julio de 2026 entra la reducción definitiva a 210 horas mensuales
       return 210;
     })();
 
-  // Mapeo directo usando las variables exactas de tu objeto summary
-  const summaryData = [
-    ['Horas Reales Totales', Number(summary.totalHours) || 0, 'Tiempo neto acumulado'],
-    ['Horas con Recargo', Number(summary.totalHoursWithRecargo) || 0, 'Total en Dominicales / Festivos'],
-    ['Días Activos', Number(summary.workedDays) || 0, 'Jornadas registradas'],
-    ['Promedio Diario', Number(summary.averageHoursPerDay) || 0, 'Media por jornada'],
-    ['Recargo Nocturno', Number(summary.totalRecargoNocturno) || 0, 'Horas físicas nocturnas'],
-    ['Horas Extras Acumuladas', Number(summary.totalHorasExtras) || 0, 'Suma de excesos > 7.5h'],
-  ];
+    // Mapeo directo usando las variables exactas de tu objeto summary
+    const summaryData = [
+      ['Horas Reales Totales', Number(summary.totalHours) || 0, 'Tiempo neto acumulado'],
+      ['Horas con Recargo', Number(summary.totalHoursWithRecargo) || 0, 'Total en Dominicales / Festivos'],
+      ['Días Activos', Number(summary.workedDays) || 0, 'Jornadas registradas'],
+      ['Promedio Diario', Number(summary.averageHoursPerDay) || 0, 'Media por jornada'],
+      ['Recargo Nocturno', Number(summary.totalRecargoNocturno) || 0, 'Horas físicas nocturnas'],
+      ['Horas Extras Acumuladas', Number(summary.totalHorasExtras) || 0, 'Suma de excesos > 7.5h']
+    ];
 
-  summaryData.forEach((metrica, idx) => {
-    const filaIdx = idx + 2;
-    const nombreMetrica = metrica[0];
-    const valorMetrica = metrica[1];
+    summaryData.forEach((metrica, idx) => {
+      const filaIdx = idx + 2;
+      const nombreMetrica = metrica[0];
+      const valorMetrica = metrica[1];
 
-   worksheet.getCell(`J${filaIdx}`).value = nombreMetrica;
-    worksheet.getCell(`K${filaIdx}`).value = valorMetrica;
+      worksheet.getCell(`J${filaIdx}`).value = nombreMetrica;
+      worksheet.getCell(`K${filaIdx}`).value = valorMetrica;
 
-    // 📊 GRÁFICO EJECUTIVO DE BARRAS SÓLIDAS CONTINUAS (100% COMPATIBLE CON EXCELJS Y ANDROID)
-    // Calculamos el porcentaje real de la métrica de forma segura para evitar divisiones por cero
-    const porcentajeMétrica = Math.min(Math.round((Number(valorMetrica) / horasBaseMes) * 100), 100);
+      // 📊 GRÁFICO EJECUTIVO DE BARRAS SÓLIDAS CONTINUAS (100% COMPATIBLE CON EXCELJS Y ANDROID)
+      // Calculamos el porcentaje real de la métrica de forma segura para evitar divisiones por cero
+      const porcentajeMétrica = Math.min(Math.round((Number(valorMetrica) / horasBaseMes) * 100), 100);
 
-    // Generamos la barra visual usando bloques sólidos rellenos (Máximo 15 bloques para que quepa perfecto)
-    const bloquesRellenos = Math.max(0, Math.min(Math.round(porcentajeMétrica / 6.6), 15));
-    const barraSolida = '█'.repeat(bloquesRellenos);
+      // Generamos la barra visual usando bloques sólidos rellenos (Máximo 15 bloques para que quepa perfecto)
+      const bloquesRellenos = Math.max(0, Math.min(Math.round(porcentajeMétrica / 6.6), 15));
+      const barraSolida = '█'.repeat(bloquesRellenos);
 
-    const celdaGrafico = worksheet.getCell(`L${filaIdx}`);
-    // Mostramos la barra continua seguida del porcentaje exacto al lado (Ej: █████ 35%)
-    celdaGrafico.value = porcentajeMétrica > 0 ? `${barraSolida} ${porcentajeMétrica}%` : '0%';
-    
-    // Aplicamos una fuente limpia de ancho fijo (Consolas) para que la barra se vea perfecta y alineada
-    celdaGrafico.font = { name: 'Consolas', size: 11, bold: true, color: { argb: 'FF2563EB' } };
-    celdaGrafico.alignment = { vertical: 'middle', horizontal: 'center' };
+      const celdaGrafico = worksheet.getCell(`L${filaIdx}`);
+      // Mostramos la barra continua seguida del porcentaje exacto al lado (Ej: █████ 35%)
+      celdaGrafico.value = porcentajeMétrica > 0 ? `${barraSolida} ${porcentajeMétrica}%` : '0%';
+
+      // Aplicamos una fuente limpia de ancho fijo (Consolas) para que la barra se vea perfecta y alineada
+      celdaGrafico.font = { name: 'Consolas', size: 11, bold: true, color: { argb: 'FF2563EB' } };
+      celdaGrafico.alignment = { vertical: 'middle', horizontal: 'center' };
 
 
-    // Aplicar cuadrícula fina gris al cuadro de resumen
-    ['J', 'K', 'L'].forEach(col => {
-      const cell = worksheet.getCell(`${col}${filaIdx}`);
-      cell.border = {
-        bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
-        top: { style: 'thin', color: { argb: 'FF94A3B8' } },
-        left: { style: 'thin', color: { argb: 'FF94A3B8' } },
-        right: { style: 'thin', color: { argb: 'FF94A3B8' } }
-      };
-      if (col === 'K') cell.alignment = { horizontal: 'center' };
+      // Aplicar cuadrícula fina gris al cuadro de resumen
+      ['J', 'K', 'L'].forEach(col => {
+        const cell = worksheet.getCell(`${col}${filaIdx}`);
+        cell.border = {
+          bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
+          top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+          left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+          right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+        };
+        if (col === 'K') cell.alignment = { horizontal: 'center' };
+      });
     });
-  });
 
-  // --- 5. COMPONENTE DE DESCARGA MULTIPLATAFORMA COMPROBADO ---
-  // Quitamos la propiedad 'addChart' rota y disparamos el buffer de forma nativa
-  try {
+    // --- 5. COMPONENTE DE DESCARGA MULTIPLATAFORMA COMPROBADO ---
+    // Quitamos la propiedad 'addChart' rota y disparamos el buffer de forma nativa
+    try {
+      if (Platform.OS === 'web') {
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        const buffer = await workbook.xlsx.writeBuffer();
+        // 🔥 TRANSFORMACIÓN NATIVA A BASE64 SIN USAR LA CLASE BUFFER DE NODE
+        const uint8Array = new Uint8Array(buffer as any);
+        let binaryString = '';
+        for (let i = 0; i < uint8Array.length; i++) {
+          binaryString += String.fromCharCode(uint8Array[i]);
+        }
+        const base64Data = btoa(binaryString);
+
+
+        const directorioNativo = (FileSystem as any).documentDirectory || (FileSystem as any).CacheDirectory || '';
+        const fileUri = `${directorioNativo}${filename}`;
+
+        await (FileSystem as any).writeAsStringAsync(fileUri, base64Data, {
+          encoding: (FileSystem as any).EncodingType?.Base64 || 'base64'
+        });
+
+        await Sharing.shareAsync(fileUri);
+      }
+    } catch (error) {
+      console.error("Error crítico descargando el reporte:", error);
+      alert("Hubo un fallo al empaquetar el archivo de Excel.");
+    }
+
+    // --- 6. PROCESAMIENTO DE DISPARO MULTIPLATAFORMA ---
     if (Platform.OS === 'web') {
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -680,70 +746,37 @@ const exportCurrentMonthToCSV = async () => {
       a.click();
       window.URL.revokeObjectURL(url);
     } else {
-      const buffer = await workbook.xlsx.writeBuffer();
-          // 🔥 TRANSFORMACIÓN NATIVA A BASE64 SIN USAR LA CLASE BUFFER DE NODE
-        const uint8Array = new Uint8Array(buffer as any);
-        let binaryString = '';
-        for (let i = 0; i < uint8Array.length; i++) {
-          binaryString += String.fromCharCode(uint8Array[i]);
-        }
-        const base64Data = btoa(binaryString);
+      // Generamos el contenido binario del archivo
+      const arrayBuffer = await workbook.xlsx.writeBuffer();
 
-      
+      // Transformación nativa multiplataforma a Base64
+      const uint8Array = new Uint8Array(arrayBuffer);
+      let binaryString = '';
+      for (let i = 0; i < uint8Array.length; i++) {
+        binaryString += String.fromCharCode(uint8Array[i]);
+      }
+      const base64Data = btoa(binaryString);
+
+      // 🔥 SOLUCIÓN DEFINITIVA: Extraemos el directorio rompiendo la restricción estricta de tipos
       const directorioNativo = (FileSystem as any).documentDirectory || (FileSystem as any).CacheDirectory || '';
       const fileUri = `${directorioNativo}${filename}`;
-      
-      await (FileSystem as any).writeAsStringAsync(fileUri, base64Data, { 
-        encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' 
+
+      // Escribimos el archivo usando los métodos directos del módulo mapeado
+      await (FileSystem as any).writeAsStringAsync(fileUri, base64Data, {
+        encoding: (FileSystem as any).EncodingType?.Base64 || 'base64'
       });
-      
+
+      // Disparamos la ventana de compartir nativa (iOS/Android)
       await Sharing.shareAsync(fileUri);
     }
-  } catch (error) {
-    console.error("Error crítico descargando el reporte:", error);
-    alert("Hubo un fallo al empaquetar el archivo de Excel.");
-  }
 
-  // --- 6. PROCESAMIENTO DE DISPARO MULTIPLATAFORMA ---
-  if (Platform.OS === 'web') {
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-    } else {
-    // Generamos el contenido binario del archivo
-    const arrayBuffer = await workbook.xlsx.writeBuffer();
-    
-    // Transformación nativa multiplataforma a Base64
-    const uint8Array = new Uint8Array(arrayBuffer);
-    let binaryString = '';
-    for (let i = 0; i < uint8Array.length; i++) {
-      binaryString += String.fromCharCode(uint8Array[i]);
-    }
-    const base64Data = btoa(binaryString);
-    
-    // 🔥 SOLUCIÓN DEFINITIVA: Extraemos el directorio rompiendo la restricción estricta de tipos
-    const directorioNativo = (FileSystem as any).documentDirectory || (FileSystem as any).CacheDirectory || '';
-    const fileUri = `${directorioNativo}${filename}`;
-    
-    // Escribimos el archivo usando los métodos directos del módulo mapeado
-    await (FileSystem as any).writeAsStringAsync(fileUri, base64Data, { 
-      encoding: (FileSystem as any).EncodingType?.Base64 || 'base64' 
-    });
-    
-    // Disparamos la ventana de compartir nativa (iOS/Android)
-    await Sharing.shareAsync(fileUri);
-  }
-
-};
+  };
 
   return (
-    <WorkHoursContext.Provider value={{ entries, currentDate, summary, loading, user, goToPrevMonth, goToNextMonth, saveDayEntry, deleteDayEntry, exportCurrentMonthToCSV, punchInRealTime,
-     globalSeconds, setGlobalSeconds }}>
+    <WorkHoursContext.Provider value={{
+      entries, currentDate, summary, loading, user, userRole, goToPrevMonth, goToNextMonth, saveDayEntry, deleteDayEntry, exportCurrentMonthToCSV, punchInRealTime,
+      globalSeconds, setGlobalSeconds
+    }}>
       {children}
     </WorkHoursContext.Provider>
   );

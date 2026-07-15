@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 
 import { TabBarIcon } from '@/components/TabBarIcon';
 import { useRef, useState } from 'react';
@@ -13,13 +13,15 @@ import { useWorkHours } from '../../context/WorkHoursContext';
 
 
 export default function RegisterScreen() {
-  const { entries, currentDate, globalSeconds } = useWorkHours() as any; // 🔌 CONEXIÓN BLINDADA: Envolvemos el useContext en ( ... as any) para forzar la lectura de entries y currentDate
+  const { entries, currentDate, globalSeconds, userRole } = useWorkHours() as any; // 🔌 CONEXIÓN BLINDADA: Envolvemos el useContext en ( ... as any) para forzar la lectura de entries y currentDate
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isManualOpen, setIsManualOpen] = useState(false);
-  
+  const router = useRouter();
 
 
-    // 🎢 EL CABLE INVISIBLE: Rastreará la posición del dedo en píxeles (ej: 0 a 200px)
+
+
+  // 🎢 EL CABLE INVISIBLE: Rastreará la posición del dedo en píxeles (ej: 0 a 200px)
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // 1. ANIMACIÓN DE ALTURA: Se encoge de 460px a solo 60px
@@ -57,16 +59,6 @@ export default function RegisterScreen() {
     }
     return daysArray;
   };
-/*
-  // Función para capturar la fecha exacta de hoy al presionar el botón flotante
-  const openTodayModal = () => {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    setSelectedDate(`${yyyy}-${mm}-${dd}`);
-  };
-*/
 
   const renderDayItem = ({ item: dayStr }: { item: string }) => {
     const dayData = (entries[dayStr] || null) as any;
@@ -75,14 +67,14 @@ export default function RegisterScreen() {
     const localDateObj = new Date(nowToday.getTime() - (offsetToday * 60 * 1000));
     const isToday = dayStr === localDateObj.toISOString().split('T')[0];
 
-    
+
     const marcasDelDia = dayData?.marcas && Array.isArray(dayData.marcas) ? dayData.marcas : [];
     const isCompletado = !!(dayData?.notes || dayData?.isHolidayOrSunday);
 
     // 🧮 CALCULADORA MULTI-TRAMOS DE ENTRADAS Y SALIDAS (AVANZA DE 2 EN 2)
     const tiempoCalculado = (() => {
       let totalSegundosDelDia = 0;
-      
+
       if (marcasDelDia.length >= 2) {
         // Avanzamos i += 2 para saltar limpiamente de pareja en pareja (Entrada + Salida)
         for (let i = 0; i < marcasDelDia.length; i += 2) {
@@ -93,14 +85,14 @@ export default function RegisterScreen() {
           if (marcaEntrada && marcaSalida && marcaEntrada.tipo === 'ENTRADA' && marcaSalida.tipo === 'SALIDA') {
             const t1 = new Date(marcaEntrada.timestamp).getTime();
             const t2 = new Date(marcaSalida.timestamp).getTime();
-            
+
             if (!isNaN(t1) && !isNaN(t2)) {
               totalSegundosDelDia += (t2 - t1) / 1000; // Sumamos los segundos puros trabajados
             }
           }
         }
       }
-      
+
       // Convertimos el total de segundos a horas decimales para mantener simetría
       return totalSegundosDelDia > 0 ? (totalSegundosDelDia / 3600) : (dayData?.hours || 0);
     })();
@@ -128,7 +120,7 @@ export default function RegisterScreen() {
             <Text style={{ fontSize: 16, fontWeight: '800', color: isToday ? '#00f5d4' : '#ffffff' }}>
               {parseInt(dayStr.split('-')[2], 10)}
             </Text>
-            
+
             {isCompletado && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0, 245, 212, 0.06)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(0, 245, 212, 0.12)' }}>
                 <TabBarIcon name="shield-checkmark" size={10} color="#00f5d4" />
@@ -146,7 +138,7 @@ export default function RegisterScreen() {
 
         {/* CONTENEDOR HÍBRIDO (Marcas vs Horas Totales a la Derecha) */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-          
+
           {/* COLUMNA IZQUIERDA: Fracciones de jornada */}
           <View style={{ flex: 1, gap: 4, paddingRight: 12 }}>
             {marcasDelDia.length === 0 ? (
@@ -155,18 +147,18 @@ export default function RegisterScreen() {
               marcasDelDia.map((punch: any, idx: number) => {
                 const esEntrada = punch.tipo === 'ENTRADA';
                 const esManual = punch.tipo === 'MANUAL';
-                
+
                 // Normalizamos visualmente cualquier variación para que pinte "Entra" o "Sale"
                 const etiquetaTipo = esManual ? 'Manual' : esEntrada ? 'Entra' : 'Sale';
                 const horaLimpia = punch.hora ? String(punch.hora).toLowerCase().trim() : '';
 
                 return (
                   <View key={punch.id || idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <View style={{ 
-                      width: 6, 
-                      height: 6, 
-                      borderRadius: 3, 
-                      backgroundColor: esManual ? '#3a86ff' : esEntrada ? '#00f5d4' : '#ff007f' 
+                    <View style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: esManual ? '#3a86ff' : esEntrada ? '#00f5d4' : '#ff007f'
                     }} />
                     <Text style={{ fontSize: 11, color: '#8d99ae', fontWeight: '600', fontVariant: ['tabular-nums'] }}>
                       {etiquetaTipo}: {horaLimpia}
@@ -180,86 +172,87 @@ export default function RegisterScreen() {
           {/* ⏱️ COLUMNA DERECHA FIJA: Cápsula inteligente multi-escala */}
 
           {marcasDelDia.length > 0 /*|| (dayData?.hours && dayData.hours > 0)*/ && (
-           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                 {/* Activamos el mapa si alguna marca real tiene coordenadas GPS registradas O si es un registro manual */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {/* Activamos el mapa si alguna marca real tiene coordenadas GPS registradas O si es un registro manual */}
               {(marcasDelDia.some((m: any) => m.latitude !== undefined && m.latitude !== null) || marcasDelDia.some((m: any) => m.tipo === 'MANUAL')) && (
 
-                  <View style={{
-                    // Si alguna marca tiene latitud, asumimos que fue ponchado con GPS (Color Verde/Celeste)
-                    backgroundColor: marcasDelDia.some((m: any) => m.latitude) ? 'rgba(0, 245, 212, 0.1)' : 'rgba(141, 153, 174, 0.1)',
-                    paddingHorizontal: 10,
-                    paddingVertical: 12.2,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: marcasDelDia.some((m: any) => m.latitude) ? 'rgba(0, 245, 212, 0.2)' : 'rgba(141, 153, 174, 0.2)',
-                    minWidth: 30,
-                    alignItems: 'center',
-                    justifyContent: 'center' }}>
+                <View style={{
+                  // Si alguna marca tiene latitud, asumimos que fue ponchado con GPS (Color Verde/Celeste)
+                  backgroundColor: marcasDelDia.some((m: any) => m.latitude) ? 'rgba(0, 245, 212, 0.1)' : 'rgba(141, 153, 174, 0.1)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 12.2,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: marcasDelDia.some((m: any) => m.latitude) ? 'rgba(0, 245, 212, 0.2)' : 'rgba(141, 153, 174, 0.2)',
+                  minWidth: 30,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
 
-                    <TabBarIcon 
-                      name="map" 
-                      size={20} 
-                      color={marcasDelDia.some((m: any) => m.latitude) ? "#00f5d4" : "#8d99ae"} 
-                    />
-                  </View>
+                  <TabBarIcon
+                    name="map"
+                    size={20}
+                    color={marcasDelDia.some((m: any) => m.latitude) ? "#00f5d4" : "#8d99ae"}
+                  />
+                </View>
 
-            )}
-            <View style={{ 
-              backgroundColor: 'rgba(0, 245, 212, 0.1)', 
-              paddingHorizontal: 10, 
-              paddingVertical: 6, 
-              borderRadius: 10, 
-              borderWidth: 1, 
-              borderColor: 'rgba(0, 245, 212, 0.2)', 
-              minWidth: 55, 
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {(() => {
-                const totalSegundos = tiempoCalculado * 3600;
-                const totalMinutos = tiempoCalculado * 60;
-                
-                if (totalSegundos < 60) {
-                  // ⚡ Escala Segundos (Menor a 1 minuto)
-                  return (
-                    <>
-                      <Text style={{ fontSize: 14, color: '#00f5d4', fontWeight: '800', fontVariant: ['tabular-nums'] }}>
-                        {Math.max(1, Math.round(totalSegundos))}s
-                      </Text>
-                      <Text style={{ fontSize: 10, color: '#8d99ae', fontWeight: '700', marginTop: 1, textTransform: 'lowercase' }}>
-                        Total
-                      </Text>
-                    </>
-                  );
-                } else if (tiempoCalculado < 1) {
-                  // ⏱️ Escala Minutos (Entre 1 minuto y 1 hora) -> ¡Aquí caerán tus 1m y 10s!
-                  return (
-                    <>
-                      <Text style={{ fontSize: 14, color: '#00f5d4', fontWeight: '800', fontVariant: ['tabular-nums'] }}>
-                        {Math.round(totalMinutos)}m
-                      </Text>
-                      <Text style={{ fontSize: 10, color: '#8d99ae', fontWeight: '700', marginTop: 1, textTransform: 'lowercase' }}>
-                        Total
-                      </Text>
-                    </>
-                  );
-                } else {
-                  // 💼 Escala Horas (Mayor a 1 hora)
-                  return (
-                    <>
-                      <Text style={{ fontSize: 14, color: '#00f5d4', fontWeight: '800', fontVariant: ['tabular-nums'] }}>
-                        {tiempoCalculado.toFixed(1)}h
-                      </Text>
-                      <Text style={{ fontSize: 10, color: '#8d99ae', fontWeight: '700', marginTop: 1, textTransform: 'lowercase' }}>
-                        Total
-                      </Text>
-                    </>
-                  );
-                }
-              })()}
+              )}
+              <View style={{
+                backgroundColor: 'rgba(0, 245, 212, 0.1)',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: 'rgba(0, 245, 212, 0.2)',
+                minWidth: 55,
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {(() => {
+                  const totalSegundos = tiempoCalculado * 3600;
+                  const totalMinutos = tiempoCalculado * 60;
+
+                  if (totalSegundos < 60) {
+                    // ⚡ Escala Segundos (Menor a 1 minuto)
+                    return (
+                      <>
+                        <Text style={{ fontSize: 14, color: '#00f5d4', fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+                          {Math.max(1, Math.round(totalSegundos))}s
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#8d99ae', fontWeight: '700', marginTop: 1, textTransform: 'lowercase' }}>
+                          Total
+                        </Text>
+                      </>
+                    );
+                  } else if (tiempoCalculado < 1) {
+                    // ⏱️ Escala Minutos (Entre 1 minuto y 1 hora) -> ¡Aquí caerán tus 1m y 10s!
+                    return (
+                      <>
+                        <Text style={{ fontSize: 14, color: '#00f5d4', fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+                          {Math.round(totalMinutos)}m
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#8d99ae', fontWeight: '700', marginTop: 1, textTransform: 'lowercase' }}>
+                          Total
+                        </Text>
+                      </>
+                    );
+                  } else {
+                    // 💼 Escala Horas (Mayor a 1 hora)
+                    return (
+                      <>
+                        <Text style={{ fontSize: 14, color: '#00f5d4', fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+                          {tiempoCalculado.toFixed(1)}h
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#8d99ae', fontWeight: '700', marginTop: 1, textTransform: 'lowercase' }}>
+                          Total
+                        </Text>
+                      </>
+                    );
+                  }
+                })()}
+              </View>
             </View>
-          </View>
-  
+
           )}
 
         </View>
@@ -285,7 +278,7 @@ export default function RegisterScreen() {
 
         {/* 🧥 CONTENEDOR ANIMADO SUPERIOR: Se encoge de 500px a 60px al deslizar el dedo */}
         <Animated.View style={{ height: headerHeight, overflow: 'hidden', backgroundColor: '#0b132b', borderBottomWidth: 1, borderBottomColor: '#1c2541' }}>
-          
+
           {/* VISTA A: El panel gigante con el cronómetro (Se desvanece al subir) */}
           <Animated.View style={{ opacity: giantButtonOpacity, flex: 1 }}>
             <RealTimePunch />
@@ -299,12 +292,12 @@ export default function RegisterScreen() {
             </View>
             <Text style={{ color: '#00f5d4', fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
 
-               {globalSeconds > 0 ? (() => {
-               const hrs = Math.floor(globalSeconds / 3600);
-               const mins = Math.floor((globalSeconds % 3600) / 60);
-               const secs = globalSeconds % 60;
-               return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-               })() : "00:00:00"}
+              {globalSeconds > 0 ? (() => {
+                const hrs = Math.floor(globalSeconds / 3600);
+                const mins = Math.floor((globalSeconds % 3600) / 60);
+                const secs = globalSeconds % 60;
+                return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+              })() : "00:00:00"}
 
 
 
@@ -333,6 +326,30 @@ export default function RegisterScreen() {
               </View>
               {/* El navegador de meses va aquí arriba del primer día de la lista */}
               <MonthNavigator />
+              {/* 👑 ACCESO GERENCIAL ESCONDIDO: Se dibuja únicamente si la cuenta en Firebase es tipo 'admin' */}
+              {userRole === 'admin' && (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: 'rgba(0, 245, 212, 0.15)',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#00f5d4',
+                    marginTop: 14, // Espaciado limpio para no pegarse al MonthNavigator
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '100%'
+                  }}
+                  onPress={() => require('expo-router').router.push('/admin' as any)}
+
+                >
+                  <Text style={{ color: '#00f5d4', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>
+                    💼 INGRESAR AL PANEL DE ADMINISTRACIÓN
+                  </Text>
+                </TouchableOpacity>
+              )}
+
             </View>
           )}
         />
@@ -342,9 +359,9 @@ export default function RegisterScreen() {
           onClose={() => setSelectedDate(null)}
           dateStr={selectedDate}
         />
-          
-          {/* 🚨 NUEVO MODAL DE NOVEDADES MANUALES CON SELECTOR DE FECHA */}
-        <ManualRegistrationModal 
+
+        {/* 🚨 NUEVO MODAL DE NOVEDADES MANUALES CON SELECTOR DE FECHA */}
+        <ManualRegistrationModal
           isOpen={isManualOpen}
           onClose={() => setIsManualOpen(false)}
         />
@@ -352,7 +369,7 @@ export default function RegisterScreen() {
       </ScreenContainer>
 
       {/* BOTÓN FLOTANTE TOTALMENTE REESTRUCTURADO ABAJO A LA DERECHA */}
-      <TouchableOpacity 
+      <TouchableOpacity
         onPress={() => setIsManualOpen(true)} // <-- Abre el nuevo módulo manual
         activeOpacity={0.85}
         style={styles.floatingButton}
