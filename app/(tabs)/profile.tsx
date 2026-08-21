@@ -73,7 +73,7 @@ export default function ProfileScreen() {
     try {
       const { auth } = require('../../lib/firebase');
       const { updatePassword } = require('firebase/auth');
-      
+
       const currentUser = auth.currentUser;
       if (currentUser) {
         await updatePassword(currentUser, newPassword.trim());
@@ -142,7 +142,7 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        
+
         {/* Tarjeta Principal del Usuario */}
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
@@ -158,7 +158,7 @@ export default function ProfileScreen() {
         {/* Bloque de Información Laboral y Personal Completa */}
         <View style={styles.infoSection}>
           <Text style={styles.sectionTitle}>INFORMACIÓN CORPORATIVA</Text>
-          
+
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Número de Cédula</Text>
             <Text style={styles.infoValue}>{userData?.cedula || 'No registrada'}</Text>
@@ -166,17 +166,18 @@ export default function ProfileScreen() {
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Teléfono / Celular</Text>
-            <Text style={styles.infoValue}>{userData?.phone || 'No registrado'}</Text>
+            <Text style={styles.infoValue}>{userData?.datosGenerales?.celular || 'No registrado'}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Dirección Residencial</Text>
-            <Text style={styles.infoValue}>{userData?.address || 'No registrada'}</Text>
+            <Text style={styles.infoValue}>{userData?.datosGenerales?.direccion ? `${userData.datosGenerales.direccion} - B/ ${userData.datosGenerales.barrio || ''}`
+              : 'No registrada'}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Fecha de Nacimiento</Text>
-            <Text style={styles.infoValue}>{userData?.birthDate || 'No registrada'}</Text>
+            <Text style={styles.infoValue}>{userData?.datosGenerales?.fechaNacimiento || 'No registrada'}</Text>
           </View>
 
           <View style={styles.infoRow}>
@@ -189,7 +190,7 @@ export default function ProfileScreen() {
         <View style={styles.securitySection}>
           <Text style={styles.sectionTitle}>SEGURIDAD DE LA CUENTA</Text>
           <Text style={styles.securitySubtext}>Digita una nueva contraseña para actualizar tu clave de acceso al sistema.</Text>
-          
+
           <View style={styles.inputContainer}>
             <View style={{ marginRight: 10 }}>
               <TabBarIcon name="lock-closed-outline" size={16} color="#8d99ae" />
@@ -205,7 +206,7 @@ export default function ProfileScreen() {
             />
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleChangePassword}
             disabled={updatingPassword}
             style={styles.updateButton}
@@ -220,9 +221,9 @@ export default function ProfileScreen() {
         </View>
 
         {/* Botón de Salida Segura */}
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={handleSignOut}
-          activeOpacity={0.8} 
+          activeOpacity={0.8}
           style={styles.logoutButton}
         >
           <TabBarIcon name="log-out-outline" size={18} color="#ff007f" />
@@ -298,74 +299,74 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     textAlign: 'center',
   },
-userEmail: {
+  userEmail: {
     fontSize: 13,
     color: '#8d99ae',
     marginBottom: 12,
     textAlign: 'center',
-},
-badge: {
+  },
+  badge: {
     backgroundColor: 'rgba(0, 245, 212, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#00f5d430',
-},
-badgeText: {
+  },
+  badgeText: {
     color: '#00f5d4',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
-},
-infoSection: {
+  },
+  infoSection: {
     backgroundColor: '#1c2541',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#3a4f7c20',
     marginBottom: 16,
-},
-securitySection: {
+  },
+  securitySection: {
     backgroundColor: '#1c2541',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#3a4f7c20',
     marginBottom: 24,
-},
-securitySubtext: {
+  },
+  securitySubtext: {
     fontSize: 12,
     color: '#8d99ae',
     lineHeight: 16,
     marginBottom: 14,
-},
-sectionTitle: {
+  },
+  sectionTitle: {
     fontSize: 11,
     fontWeight: '700',
     color: '#8d99ae',
     letterSpacing: 0.5,
     marginBottom: 12,
-},
-infoRow: {
+  },
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(58, 79, 124, 0.15)',
-},
-infoLabel: {
+  },
+  infoLabel: {
     fontSize: 13,
     color: '#cbd5e1',
-},
-infoValue: {
+  },
+  infoValue: {
     fontSize: 13,
     fontWeight: '600',
     color: '#ffffff',
     maxWidth: '60%',
     textAlign: 'right',
-},
-inputContainer: {
+  },
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0b132b',
@@ -374,14 +375,14 @@ inputContainer: {
     borderWidth: 1,
     borderColor: '#3a4f7c30',
     marginBottom: 12,
-},
-input: {
+  },
+  input: {
     flex: 1,
     color: '#ffffff',
     paddingVertical: 10,
     fontSize: 15,
-},
-updateButton: {
+  },
+  updateButton: {
     backgroundColor: '#3a86ff',
     paddingVertical: 12,
     borderRadius: 12,
@@ -390,26 +391,26 @@ updateButton: {
     shadowOpacity: 0.2,
     shadowRadius: 5,
     elevation: 3,
-},
-updateButtonText: {
+  },
+  updateButtonText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
-},
-logoutButton: {
-   flexDirection: 'row',
-   alignItems: 'center',
-   justifyContent: 'center',
-   backgroundColor: 'rgba(255, 0, 127, 0.1)',
-   paddingVertical: 14,
-   borderRadius: 12,
-   gap: 8,
-   borderWidth: 1,
-   borderColor: 'rgba(255, 0, 127, 0.2)',
-},
-logoutButtonText: {
-   color: '#ff007f',
-   fontSize: 14,
-   fontWeight: '600',
-},
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 0, 127, 0.1)',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 127, 0.2)',
+  },
+  logoutButtonText: {
+    color: '#ff007f',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });

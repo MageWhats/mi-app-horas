@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { User } from 'firebase/auth';
-import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 //@ts-ignore
@@ -259,22 +259,21 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
 
       // 2. DETECTOR DE ORIGEN: Evaluamos si el formulario envía horas explícitas
-      let marcasFinales = marcasExistentes;
+      let marcasFinales = [...marcasExistentes];
 
       if (entryData.startTime && entryData.endTime) {
         const horaLegible = `${entryData.startTime} - ${entryData.endTime}`;
-        marcasFinales = [
-          {
-            id: `manual-${Date.now()}`,
-            tipo: 'MANUAL',
-            horaIngreso: entryData.startTime.trim(), // 🛡️ ¡Sueltas y separadas por fin!
-            horaSalida: entryData.endTime.trim(),   // 🛡️ ¡Sueltas y separadas por fin!
-            hora: horaLegible, // Respaldamos el texto completo para no romper la visual actual
-            zona: 'Registro Manual'
-          }
-        ];
+
+        marcasFinales.push({
+          id: `manual-${Date.now()}`,
+          tipo: 'MANUAL',
+          horaIngreso: entryData.startTime.trim(),
+          horaSalida: entryData.endTime.trim(),
+          hora: horaLegible,
+          zona: 'Registro Manual',
+        });
       } else if ((entryData as any).marcas && (entryData as any).marcas.length > 0) {
-        marcasFinales = (entryData as any).marcas;
+        marcasFinales = [...marcasExistentes, ...(entryData as any).marcas];
       }
 
 
@@ -342,7 +341,16 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         console.log("Horas nocturnas finales que van a subirse:", nightHours);
         console.log("=============================");
 
+        const nuevasHorasDelTurno = (entryData as any).totalHours || totalHours;
+        // Accedemos directo al mapa de memoria del snapshot de Google Firestore
+        const diaExistenteEnDB = dayDocSnap.exists() ? (dayDocSnap.data().dias || {})[entryData.date] || {} : {};
+
+        totalHours = parseFloat((horasExistentes + nuevasHorasDelTurno).toFixed(2));
+        nightHours = parseFloat(((diaExistenteEnDB.nightHours || 0) + nightHours).toFixed(2));
+
+
       }
+
 
       // 4. Armamos la estructura del día actual indexada para el mapa mensual
       const diaEstructurado = {
@@ -350,6 +358,7 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         totalHours: totalHours, // El valor matemático que procesó tu limpiador de arriba
         nightHours: nightHours > 0 ? nightHours : 0,
         isHolidayOrSunday: entryData.isHolidayOrSunday,
+        tipoIngreso: (entryData as any).marcas?.[0]?.tipo || 'MANUAL',
         notes: entryData.notes || null,
         marcas: marcasFinales
       };
@@ -473,6 +482,7 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         nightHours: 0,
         isHolidayOrSunday: currentIsHoliday,
         notes: currentNotes,
+        tipoIngreso: 'REALTIME',
         marcas: listaActualizada
       };
 
@@ -545,11 +555,53 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   // 5. ELIMINAR JORNADA DE LA NUBE
+
   const deleteDayEntry = async (dateStr: string) => {
     if (!user) return;
-    const docId = `${user.uid}_${dateStr}`;
-    await deleteDoc(doc(db, 'work_entries', docId));
+    try {
+      const { doc, getDoc, setDoc } = require('firebase/firestore');
+
+      // 1. Extraemos el año-mes de la fecha seleccionada (Ej: "2026-07-14" -> "2026-07")
+      const [year, month] = dateStr.split('-');
+      const currentYearMonth = `${year}-${month}`;
+
+      const monthDocRef = doc(db, 'work_months', `${user.uid}_${currentYearMonth}`);
+      const docSnap = await getDoc(monthDocRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const mapaDias = data.dias || {};
+
+        // 1. Verificamos si de verdad el día existe antes de mandar la orden a la nube
+        if (mapaDias[dateStr]) {
+          const { updateDoc, deleteField } = require('firebase/firestore');
+
+          // 2. BORRADO DEFINITIVO NO SQL: Usamos updateDoc + deleteField()
+          // Esto le ordena a los servidores de Firebase destruir la clave de ese día específico
+          await updateDoc(monthDocRef, {
+            [`dias.${dateStr}`]: deleteField(),
+            updatedAt: new Date().toISOString()
+          });
+
+          // 3. Sincronización inmediata en el calendario de la App (Línea 26 de tu foto)
+          if (typeof setEntries === 'function') {
+            setEntries((prev: any) => {
+              const copia = { ...prev };
+              delete copia[dateStr];
+              return copia;
+            });
+          }
+
+          alert("¡Jornada removida con éxito de tu planilla NoSQL! 🗑️");
+        }
+      }
+
+    } catch (error) {
+      console.error("Error eliminando jornada en work_months:", error);
+      alert("No se pudo limpiar el registro del día.");
+    }
   };
+
 
   const exportCurrentMonthToCSV = async () => {
     const workbook = new ExcelJS.Workbook();
