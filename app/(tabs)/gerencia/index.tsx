@@ -36,7 +36,7 @@ export default function AdminScreen() {
       <View style={{ width: "100%" }}>
         {/* Botón Nómina */}
         <TouchableOpacity
-          onPress={() => router.replace("/admins/nomina")}
+          onPress={() => router.push("/gerencia/nomina")}
           style={{
             width: "100%",
             padding: 20,
@@ -64,7 +64,7 @@ export default function AdminScreen() {
 
         {/* Botón Inventario */}
         <TouchableOpacity
-          onPress={() => router.replace("/admins/inventario")}
+          onPress={() => router.push("/gerencia/inventario")}
           style={{
             width: "100%",
             padding: 20,
@@ -93,7 +93,7 @@ export default function AdminScreen() {
 
         {/* Botón Contabilidad */}
         <TouchableOpacity
-          onPress={() => router.replace("/admins/contabilidad")}
+          onPress={() => router.push("/gerencia/contabilidad")}
           style={{
             width: "100%",
             padding: 20,
@@ -122,7 +122,7 @@ export default function AdminScreen() {
 
         {/* Botón Roles */}
         <TouchableOpacity
-          onPress={() => router.replace("/admins/maestros")}
+          onPress={() => router.push("/gerencia/maestros")}
           style={{
             width: "100%",
             padding: 20,

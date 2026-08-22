@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import {
@@ -15,6 +16,7 @@ type TabActiva = 'ENTIDADES' | 'CARGOS';
 type TipoCatalogo = 'eps' | 'pensiones' | 'cesantias' | 'arl' | 'cajas';
 
 export default function ParametrosNominaScreen() {
+    const router = useRouter();
     const [tab, setTab] = useState<TabActiva>('ENTIDADES');
     const [loading, setLoading] = useState(false);
 
@@ -133,11 +135,29 @@ export default function ParametrosNominaScreen() {
     return (
         <ScrollView style={containerStyle} contentContainerStyle={{ paddingBottom: 40 }}>
 
-            {/* CABECERA */}
-            <View style={{ marginBottom: 24 }}>
-                <Text style={{ color: '#ffffff', fontSize: 22, fontWeight: 'bold' }}>CONFIGURACIÓN DE PARÁMETROS</Text>
-                <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 2 }}>Tablas maestras de nómina y contratación</Text>
-            </View>
+            
+      {/* HEADER DE MÓDULO ADAPTADO */}
+      <View style={{ marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, paddingRight: 10 }}>
+          <Text style={{ color: '#ffffff', fontSize: 22, fontWeight: 'bold' }}>CONFIGURACIÓN DE PARÁMETROS</Text>
+          <Text style={{ color: '#6b7280', fontSize: 13, marginTop: 2 }}>Tablas maestras de nómina y contratación</Text>
+        </View>
+
+        {/* BOTÓN SOLICITADO: SALIR DEL MÓDULO */}
+        <TouchableOpacity
+          onPress={() => router.back()} // Como usamos .push() en el index, este hace pop seguro
+          style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+            borderColor: 'rgba(239, 68, 68, 0.5)',
+            borderWidth: 1,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: 8
+          }}
+        >
+          <Text style={{ color: '#f87171', fontSize: 12, fontWeight: 'bold' }}>✕ Salir Módulo</Text>
+        </TouchableOpacity>
+      </View>
 
             {/* BARRA DE PESTAÑAS (TABS GENERALES) */}
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>

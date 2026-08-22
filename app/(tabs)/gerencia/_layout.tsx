@@ -7,13 +7,15 @@ export default function AdminLayout() {
         headerStyle: { backgroundColor: '#090d16' },
         headerTintColor: '#ffffff',
         headerTitleStyle: { fontWeight: 'bold' },
+        headerShown: false,
         animation: 'slide_from_right',
       }}
     >
-      <Stack.Screen name="nomina" options={{ title: 'Gestión de Nómina' }} />
-      <Stack.Screen name="inventario" options={{ title: 'Control de Inventario' }} />
-      <Stack.Screen name="contabilidad" options={{ title: 'Contabilidad General' }} />
-      <Stack.Screen name="roles" options={{ title: 'Asignación de Roles' }} />
+      <Stack.Screen name="index"  />
+      <Stack.Screen name="nomina"  />
+      <Stack.Screen name="inventario"  />
+      <Stack.Screen name="contabilidad"  />
+      <Stack.Screen name="maestros"  />
     </Stack>
   );
 }

@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -22,6 +23,7 @@ interface MarcaTiempo {
 }
 
 export default function NominaScreen() {
+  const router = useRouter();
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('VINCULACION');
   const [loading, setLoading] = useState(false);
   const [filtroCedula, setFiltroCedula] = useState('');
@@ -225,7 +227,7 @@ export default function NominaScreen() {
   };
 
   // Filtrado reactivo de usuarios por buscador
-  const usuariosFiltrados = todosLosUsuarios.filter(u => 
+  const usuariosFiltrados = todosLosUsuarios.filter(u =>
     u.id.includes(filtroCedula) || u.fullName?.toLowerCase().includes(filtroCedula.toLowerCase())
   );
 
@@ -241,11 +243,28 @@ export default function NominaScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#090d16' }} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-      
-      {/* HEADER DE MÓDULO */}
-      <View style={{ marginBottom: 20 }}>
-        <Text style={{ color: '#ffffff', fontSize: 24, fontWeight: 'bold' }}>SISTEMA COMPLETO DE NÓMINA ERP</Text>
-        <Text style={{ color: '#6b7280', fontSize: 13, marginTop: 2 }}>Mar Profundo — Consola Administrativa Legal</Text>
+
+      {/* HEADER DE MÓDULO ADAPTADO */}
+      <View style={{ marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, paddingRight: 10 }}>
+          <Text style={{ color: '#ffffff', fontSize: 22, fontWeight: 'bold' }}>SISTEMA COMPLETO DE NÓMINA ERP</Text>
+          <Text style={{ color: '#6b7280', fontSize: 13, marginTop: 2 }}>Mar Profundo — Consola Administrativa Legal</Text>
+        </View>
+
+        {/* BOTÓN SOLICITADO: SALIR DEL MÓDULO */}
+        <TouchableOpacity
+          onPress={() => router.back()} // Como usamos .push() en el index, este hace pop seguro
+          style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+            borderColor: 'rgba(239, 68, 68, 0.5)',
+            borderWidth: 1,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: 8
+          }}
+        >
+          <Text style={{ color: '#f87171', fontSize: 12, fontWeight: 'bold' }}>✕ Salir Módulo</Text>
+        </TouchableOpacity>
       </View>
 
       {/* SUB-BARRA DE NAVEGACIÓN EN CALIENTE (4 PASOS) */}
@@ -285,7 +304,7 @@ export default function NominaScreen() {
       {activeSubTab === 'VINCULACION' && usuarioSeleccionado && (
         <View style={cardStyle}>
           <Text style={{ color: '#3b82f6', fontSize: 15, fontWeight: 'bold', marginBottom: 12 }}>TERMINAR REGISTRO: {usuarioSeleccionado.fullName?.toUpperCase()}</Text>
-          
+
           <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 4 }}>ASIGNAR CARGO MAESTRO (SUELDO AUTOMÁTICO)</Text>
           <View style={selectWrapperStyle}>
             <select value={cargoSeleccionado} onChange={(e: any) => setCargoSeleccionado(e.target.value)} style={selectStyle}>
@@ -412,7 +431,7 @@ export default function NominaScreen() {
       {activeSubTab === 'INCAPACIDADES' && usuarioSeleccionado && (
         <View style={cardStyle}>
           <Text style={{ color: '#f59e0b', fontSize: 15, fontWeight: 'bold', marginBottom: 12 }}>REGISTRAR INCAPACIDAD: {usuarioSeleccionado.fullName?.toUpperCase()}</Text>
-          
+
           <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 4 }}>FECHA DE INICIO DE LA INCAPACIDAD</Text>
           <TextInput value={fechaInicioIncapacidad} onChangeText={setFechaInicioIncapacidad} style={inputStyle} placeholder="AAAA-MM-DD" placeholderTextColor="#4b5563" />
 
@@ -441,7 +460,7 @@ export default function NominaScreen() {
       {activeSubTab === 'SABANA_COSTOS' && (
         <View>
           <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: 'bold', marginBottom: 12 }}>CONSOLIDADO MENSUAL GENERAL DE COSTOS</Text>
-          
+
           <View style={[cardStyle, { flexDirection: 'row', gap: 10 }]}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 4 }}>PRÉSTAMOS / DESCUENTOS FIJOS ($)</Text>
