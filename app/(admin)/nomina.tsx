@@ -2,8 +2,8 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Cargo, Entidad, fetchCargosEmpresa, fetchEntidadesColombia } from '../../../lib/apiEntidades';
-import { db } from '../../../lib/firebase';
+import { Cargo, Entidad, fetchCargosEmpresa, fetchEntidadesColombia } from '../../lib/apiEntidades';
+import { db } from '../../lib/firebase';
 
 // Constantes Legales Oficiales Colombia 2026
 const SMMLV_2026 = 1750905;

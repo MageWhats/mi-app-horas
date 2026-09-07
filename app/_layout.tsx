@@ -4,11 +4,12 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
-// @ts-ignore - Apaga el chequeo estricto del tipo implícito de Firebase en la raíz del proyecto
-import { auth } from '../lib/firebase'; // Enlace a tus credenciales de Google
+// @ts-ignore 
+import { auth, db } from '../lib/firebase'; // Enlace a tus credenciales de Google
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -33,15 +34,36 @@ function MainAuthGate({ loaded }: { loaded: boolean }) {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const segments = useSegments();
-  
+
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<any>(null);
+
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   // 1. Escucha de Firebase para detectar cambios de usuario en la nube
   useEffect(() => {
     // @ts-ignore - Apaga el chequeo estricto del tipo implícito de Firebase en la raíz del proyecto
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    const unsubscribe = onAuthStateChanged(auth, async (currrentUser) => {
+      if (currrentUser) {
+        setUser(currrentUser);
+        try {
+          const userDocRef = doc(db, 'users', currrentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            setUserRole(userData.role || userData.rol || 'Operario');
+          } else {
+            setUserRole('Operario'); // Valor por defecto si no se encuentra el documento
+          }
+        } catch (error) {
+          console.error("Error recuperando el rol en el Gate principal:", error);
+          setUserRole('Operario'); // Valor por defecto en caso de error
+        }
+      } else {
+        setUser(null);
+        setUserRole(null);
+      }
       setInitializing(false);
       SplashScreen.hideAsync();
     });
@@ -52,15 +74,34 @@ function MainAuthGate({ loaded }: { loaded: boolean }) {
   useEffect(() => {
     if (initializing || !loaded) return;
 
-    // Detecta si el usuario está actualmente dentro de las pantallas protegidas (tabs)
-    const inTabsGroup = segments[0] === '(tabs)';
+    // Detecta si el usuario está actualmente dentro de las pantallas protegidas (admin o operario)
+    const currentSegment = segments[0];
+    const isInOperario = currentSegment === '(operario)';
+    const isInAdmin = currentSegment === '(admin)';
+    const isInAuth = currentSegment === 'login' || currentSegment === 'register' || currentSegment === undefined;
 
-    if (!user && inTabsGroup) {
-      // Bloqueo: Si no hay usuario y trata de ver las horas, lo mandamos al Login
-      router.replace('/login');
-    } else if (user && !inTabsGroup) {
-      // Si ya inició sesión y está en las pantallas de acceso, lo mandamos directo al inicio
-      router.replace('/(tabs)');
+    // 🔀 2. CONDICIONALES DE REDIRECCIÓN CONTROLADA (Evitan bucles)
+    if (user) {
+      // Si el usuario ya está dentro de las pantallas de la app, NO redirigir más (Rompe el bucle)
+      if (isInOperario || isInAdmin) {
+        return;
+      }
+
+      if (!userRole) return; // Espera a que se cargue el rol antes de redirigir
+
+      const esAdmin = userRole === 'admin';
+
+      if (isInAuth) {
+        if (esAdmin) {
+          router.replace('/dashboard' as any);
+        } else {
+          router.replace('/(operario)' as any);
+        }
+      }
+    } else {
+      if (!isInAuth) {
+        router.replace('login' as any);
+      }
     }
   }, [user, initializing, segments, loaded]);
 
@@ -76,7 +117,8 @@ function MainAuthGate({ loaded }: { loaded: boolean }) {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(admin)"/>
+        <Stack.Screen name="(operario)" />
         <Stack.Screen name="login" />
         <Stack.Screen name="register" />
       </Stack>

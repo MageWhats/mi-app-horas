@@ -86,19 +86,6 @@ export default function TabLayout() {
             ),
           }}
         />
-
-        {/* PESTAÑA DE GERENCIA UNIFICADA - REEMPLAZAR LAS DOS ANTERIORES */}
-
-         <Tabs.Screen
-          name="gerencia"
-          options={{
-            title: 'Gerencia',
-            headerShown: false, // Oculta el header por defecto de los tabs
-            tabBarIcon: ({ color, focused }) => (
-              <TabBarIcon name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'} color={color as string} />
-            ),
-          }}
-        /> 
       </Tabs>
 
     </WorkHoursProvider>

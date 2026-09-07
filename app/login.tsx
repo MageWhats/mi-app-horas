@@ -11,6 +11,7 @@ export default function SmartLogin() {
   const [cedula, setCedula] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState('');
   const router = useRouter();
 
   const mostrarAlerta = (titulo: string, mensaje: string) => {
@@ -55,8 +56,14 @@ export default function SmartLogin() {
       // @ts-ignore
       await signInWithEmailAndPassword(auth, emailAsociado, password);
 
-      // Redirección directa al ecosistema interno de la app
-      router.replace('/(tabs)');
+       // 🔀 Redirección controlada basada en roles
+    if (userData.role === 'admin') {
+      // Si es administrador, lo mandamos al dashboard principal (raíz de la carpeta (admin))
+      router.replace('/dashboard' as any);
+    } else {
+      // Si es operario, lo mandamos a su app de campo (raíz de la carpeta (operario))
+      router.replace('/(operario)' as any);
+    }
 
     } catch (error: any) {
       console.error(error);
@@ -98,87 +105,87 @@ export default function SmartLogin() {
           SISTEMA DE CONTROL HORARIO
         </Text>
 
-{/* CAMPO DE CÉDULA INTELIGENTE */}
-<Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8, fontWeight: '500' }}>
-  Número de Cédula
-</Text>
+        {/* CAMPO DE CÉDULA INTELIGENTE */}
+        <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8, fontWeight: '500' }}>
+          Número de Cédula
+        </Text>
 
-{/* La View madre se convierte en el recuadro contenedor con fondo y borde */}
-<View style={{ 
-  flexDirection: 'row', 
-  alignItems: 'center', 
-  backgroundColor: '#0c1322', // El fondo oscuro que usabas
-  borderWidth: 1, 
-  borderColor: '#1a2436', // El borde gris/azul
-  borderRadius: 12, 
-  paddingHorizontal: 16,
-  width: '100%',
-  height: 52 // Forzamos una altura fija cómoda para el clic
-}}>
-  
-  {/* Icono posicionado a la izquierda */}
-  <View style={{ marginRight: 12 }}>
-    <TabBarIcon name="card-outline" size={20} color="#8d99ae" />
-  </View>
+        {/* La View madre se convierte en el recuadro contenedor con fondo y borde */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#0c1322', // El fondo oscuro que usabas
+          borderWidth: 1,
+          borderColor: '#1a2436', // El borde gris/azul
+          borderRadius: 12,
+          paddingHorizontal: 16,
+          width: '100%',
+          height: 52 // Forzamos una altura fija cómoda para el clic
+        }}>
 
-  {/* El TextInput ahora es invisible (sin bordes ni fondos) y se expande en el espacio restante */}
-  <TextInput
-    placeholder="Cédula"
-    placeholderTextColor="#4b5563"
-    value={cedula}
-    onChangeText={(txt) => setCedula(txt.replace(/[^0-9]/g, ""))}
-    keyboardType="numeric"
-    style={{ 
-      flex: 1, // Se estira para ocupar todo el cuadro
-      color: '#ffffff', 
-      fontSize: 15,
-      height: '100%',
-      ...({ outlineStyle: 'none' } as any) 
-    }}
-  />
-</View>
+          {/* Icono posicionado a la izquierda */}
+          <View style={{ marginRight: 12 }}>
+            <TabBarIcon name="card-outline" size={20} color="#8d99ae" />
+          </View>
+
+          {/* El TextInput ahora es invisible (sin bordes ni fondos) y se expande en el espacio restante */}
+          <TextInput
+            placeholder="Cédula"
+            placeholderTextColor="#4b5563"
+            value={cedula}
+            onChangeText={(txt) => setCedula(txt.replace(/[^0-9]/g, ""))}
+            keyboardType="numeric"
+            style={{
+              flex: 1, // Se estira para ocupar todo el cuadro
+              color: '#ffffff',
+              fontSize: 15,
+              height: '100%',
+              ...({ outlineStyle: 'none' } as any)
+            }}
+          />
+        </View>
 
 
 
-{/* CAMPO DE CONTRASEÑA INTELIGENTE */}
-<Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8, fontWeight: '500' }}>
-  Contraseña
-</Text>
+        {/* CAMPO DE CONTRASEÑA INTELIGENTE */}
+        <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 8, fontWeight: '500' }}>
+          Contraseña
+        </Text>
 
-{/* La View madre se convierte en el recuadro contenedor con fondo y borde */}
-<View style={{ 
-  flexDirection: 'row', 
-  alignItems: 'center', 
-  backgroundColor: '#0c1322', // El fondo oscuro que usabas
-  borderWidth: 1, 
-  borderColor: '#1a2436', // El borde gris/azul
-  borderRadius: 12, 
-  paddingHorizontal: 16,
-  width: '100%',
-  height: 52 // Forzamos una altura fija cómoda para el clic
-}}>
-  
-  {/* Icono posicionado a la izquierda */}
-  <View style={{ marginRight: 12 }}>
-    <TabBarIcon name="card-outline" size={20} color="#8d99ae" />
-  </View>
+        {/* La View madre se convierte en el recuadro contenedor con fondo y borde */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#0c1322', // El fondo oscuro que usabas
+          borderWidth: 1,
+          borderColor: '#1a2436', // El borde gris/azul
+          borderRadius: 12,
+          paddingHorizontal: 16,
+          width: '100%',
+          height: 52 // Forzamos una altura fija cómoda para el clic
+        }}>
 
-  {/* El TextInput ahora es invisible (sin bordes ni fondos) y se expande en el espacio restante */}
-  <TextInput
-    placeholder="Contraseña"
-    placeholderTextColor="#4b5563"
-    value={password}
-    onChangeText={setPassword}
-    secureTextEntry
-    style={{ 
-      flex: 1, // Se estira para ocupar todo el cuadro
-      color: '#ffffff', 
-      fontSize: 15,
-      height: '100%',
-      ...({ outlineStyle: 'none' } as any) 
-    }}
-  />
-</View>
+          {/* Icono posicionado a la izquierda */}
+          <View style={{ marginRight: 12 }}>
+            <TabBarIcon name="card-outline" size={20} color="#8d99ae" />
+          </View>
+
+          {/* El TextInput ahora es invisible (sin bordes ni fondos) y se expande en el espacio restante */}
+          <TextInput
+            placeholder="Contraseña"
+            placeholderTextColor="#4b5563"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            style={{
+              flex: 1, // Se estira para ocupar todo el cuadro
+              color: '#ffffff',
+              fontSize: 15,
+              height: '100%',
+              ...({ outlineStyle: 'none' } as any)
+            }}
+          />
+        </View>
 
         {/* Botón de Acción Principal */}
         <TouchableOpacity

@@ -2,15 +2,15 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import {
-    Cargo,
-    eliminarCargoEmpresa,
-    eliminarEntidadCatalogo,
-    Entidad,
-    fetchCargosEmpresa,
-    fetchEntidadesColombia,
-    guardarNuevaEntidad,
-    guardarNuevoCargo
-} from '../../../lib/apiEntidades'; // Ajusta la ruta según tu árbol
+  Cargo,
+  eliminarCargoEmpresa,
+  eliminarEntidadCatalogo,
+  Entidad,
+  fetchCargosEmpresa,
+  fetchEntidadesColombia,
+  guardarNuevaEntidad,
+  guardarNuevoCargo
+} from '../../lib/apiEntidades'; // Ajusta la ruta según tu árbol
 
 type TabActiva = 'ENTIDADES' | 'CARGOS';
 type TipoCatalogo = 'eps' | 'pensiones' | 'cesantias' | 'arl' | 'cajas';

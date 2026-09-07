@@ -11,11 +11,11 @@ export default function AdminLayout() {
         animation: 'slide_from_right',
       }}
     >
-      <Stack.Screen name="index"  />
-      <Stack.Screen name="nomina"  />
-      <Stack.Screen name="inventario"  />
-      <Stack.Screen name="contabilidad"  />
-      <Stack.Screen name="maestros"  />
+      <Stack.Screen name="dashboard" />
+      <Stack.Screen name="nomina" />
+      <Stack.Screen name="inventario" />
+      <Stack.Screen name="contabilidad"/>
+      <Stack.Screen name="maestros"/>
     </Stack>
   );
 }

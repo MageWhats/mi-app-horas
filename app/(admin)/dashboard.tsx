@@ -1,9 +1,7 @@
 import { useRouter } from "expo-router";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-
-export default function AdminScreen() {
+export default function DashboardScreen() {
   const router = useRouter();
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: "#090d16" }}
@@ -31,12 +29,11 @@ export default function AdminScreen() {
           Mar Profundo — Control de Operations
         </Text>
       </View>
-
       {/* Contenedor de Botones Grandes con navegación nativa */}
       <View style={{ width: "100%" }}>
         {/* Botón Nómina */}
         <TouchableOpacity
-          onPress={() => router.push("/gerencia/nomina")}
+          onPress={() => router.push("/(admin)/nomina" as any)}
           style={{
             width: "100%",
             padding: 20,
@@ -61,10 +58,9 @@ export default function AdminScreen() {
             Control de operarios, liquidación de horas y asistencia.
           </Text>
         </TouchableOpacity>
-
         {/* Botón Inventario */}
         <TouchableOpacity
-          onPress={() => router.push("/gerencia/inventario")}
+          onPress={() => router.push("/(admin)/inventario" as any)}
           style={{
             width: "100%",
             padding: 20,
@@ -90,10 +86,9 @@ export default function AdminScreen() {
             empresa.
           </Text>
         </TouchableOpacity>
-
         {/* Botón Contabilidad */}
         <TouchableOpacity
-          onPress={() => router.push("/gerencia/contabilidad")}
+          onPress={() => router.push("/(admin)/contabilidad" as any)}
           style={{
             width: "100%",
             padding: 20,
@@ -119,10 +114,9 @@ export default function AdminScreen() {
             generales.
           </Text>
         </TouchableOpacity>
-
         {/* Botón Roles */}
         <TouchableOpacity
-          onPress={() => router.push("/gerencia/maestros")}
+          onPress={() => router.push("/(admin)/maestros" as any)}
           style={{
             width: "100%",
             padding: 20,
