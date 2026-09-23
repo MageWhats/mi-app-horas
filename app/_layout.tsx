@@ -14,7 +14,7 @@ import { auth, db } from '../lib/firebase'; // Enlace a tus credenciales de Goog
 export { ErrorBoundary } from 'expo-router';
 
 export const unstable_settings = {
-  initialRouteName: '(tabs)',
+  initialRouteName: 'login',
 };
 
 SplashScreen.preventAutoHideAsync();
