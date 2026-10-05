@@ -1,14 +1,19 @@
 // components/SummaryCard.tsx
 import React from 'react';
 import { Text, View } from 'react-native';
+import { getFranjaNocturnaLabel, getRecargoDominical, toLocalDateStr } from '../lib/utils';
 import { MonthlySummary } from '../types/hours';
 import { TabBarIcon } from './TabBarIcon'; // Conectado al nuevo sistema vectorial
 
 interface SummaryCardProps {
   summary: MonthlySummary;
+  currentDate: Date;
 }
 
-export const SummaryCard: React.FC<SummaryCardProps> = ({ summary }) => {
+export const SummaryCard: React.FC<SummaryCardProps> = ({ summary, currentDate }) => {
+  // Las reglas legales se muestran con la vigencia del último día del mes visualizado
+  const cierreMes = toLocalDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
+
   const renderMetricItem = (title: string, value: string | number, subtext: string, iconName: string, iconColor: string) => (
     <View style={{ flex: 1, minWidth: '45%', backgroundColor: '#1c2541', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#3a4f7c20', margin: 4 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -26,13 +31,13 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({ summary }) => {
         
         {renderMetricItem('Horas Reales', `${summary.totalHours}h`, 'Tiempo neto laborado', 'time-outline', '#00b4d8')}
         
-        {renderMetricItem('Con Recargo', `${summary.totalHoursWithRecargo}h`, 'Solo domingos / festivos', 'calculator-outline', '#3a86ff')}
+        {renderMetricItem('Con Recargo', `${summary.totalHoursWithRecargo}h`, `Domingos / festivos (+${getRecargoDominical(cierreMes)}%)`, 'calculator-outline', '#3a86ff')}
         
         {renderMetricItem('Días Activos', summary.workedDays, 'Jornadas registradas', 'calendar-outline', '#00f5d4')}
         
         {renderMetricItem('Promedio Diario', `${summary.averageHoursPerDay}h`, 'Media por jornada', 'analytics-outline', '#9b5de5')}
 
-        {renderMetricItem('Recarga Noct.', `${summary.totalRecargoNocturno}h`, 'Equivalente +35% legal', 'moon-outline', '#f59e0b')}
+        {renderMetricItem('Recargo Noct.', `${summary.totalRecargoNocturno}h`, `Horas de ${getFranjaNocturnaLabel(cierreMes)}`, 'moon-outline', '#f59e0b')}
 
         {renderMetricItem('Horas Extras', `${summary.totalHorasExtras}h`, 'Excesos diarios > 7.5h', 'trending-up-outline', '#ff007f')}
 

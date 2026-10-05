@@ -1,12 +1,12 @@
 // components/TabBarIcon.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { ColorValue, Platform } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 interface TabBarIconProps {
   name: string;
   size?: number;
-  color: string;
+  color: ColorValue;
 }
 
 const SVG_ICONS: Record<string, string> = {
@@ -30,18 +30,18 @@ const SVG_ICONS: Record<string, string> = {
   'log-out-outline': 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4h-2v4H5V5h14v4h2V5c0-1.1-.9-2-2-2zm-2.5 8.5H10v1h6.5V16L21 12.5 16.5 9v2.5z',
   'shield-checkmark': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zm4.5-12.5l-5.5 5.5-3.5-3.5 1.5-1.5 2 2 4-4 1.5 1.5z',
   'shield-checkmark-outline': 'M12 2L4 5v7c0 5.25 4.31 9.4 8 10 3.69-.6 8-4.75 8-10V5l-8-3zm6 10c0 4.13-3.23 7.55-6 8-2.77-.45-6-3.87-6-8V6.58l6-2.25 6 2.25V12zm-3.5-2.5l-1.5-1.5-4 4-2-2-1.5 1.5 3.5 3.5 5.5-5.5z',
-  'briefcase': 'M336 288H176v-32H16v128c0 26.5 21.5 48 48 48h384c26.5 0 48-21.5 48-48V256h-160v32zm128-160h-96V80c0-26.5-21.5-48-48-48H192c-26.5 0-48 21.5-48 48v48H48c-26.5 0-48 21.5-48 48v48h512v-48c0-26.5-21.5-48-48-48zm-160 0H192V80h128v48z',
-  'briefcase-outline': 'M32 128h448v320H32zm112 0V96a32 32 0 0 1 32-32h160a32 32 0 0 1 32 32v32m144 112H32m288 0v24a8 8 0 0 1-8 8H200a8 8 0 0 1-8-8v-24',
-
-
-
+  'play-circle': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z',
+  'stop-circle': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4 14H8V8h8v8z',
+  'lock-closed': 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z',
+  'card': 'M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z',
+  'alert-circle': 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z',
 };
 
 export function TabBarIcon({ name, size = 24, color }: TabBarIconProps) {
   if (Platform.OS === 'web') {
-    // Limpia de forma estricta tanto '-outline' como '-sharp' para encontrar la clave exacta (ej: 'map-outline' se vuelve 'map')
+    // Busca primero el nombre exacto y, si no existe, la variante sin '-outline'/'-sharp' (ej: 'map-outline' → 'map')
     const cleanName = name.replace('-outline', '').replace('-sharp', '').trim();
-    const pathData = SVG_ICONS[cleanName] || SVG_ICONS['calendar'];
+    const pathData = SVG_ICONS[name] || SVG_ICONS[cleanName] || SVG_ICONS['calendar'];
     return (
       <Svg height={size} width={size} viewBox="0 0 24 24">
         <Path d={pathData} fill={color} />

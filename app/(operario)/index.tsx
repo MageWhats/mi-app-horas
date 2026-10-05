@@ -1,6 +1,4 @@
-// app/(tabs)/index.tsx
-import { Stack, useRouter } from "expo-router";
-
+// app/(operario)/index.tsx
 import { TabBarIcon } from "@/components/TabBarIcon";
 import { useRef, useState } from "react";
 import {
@@ -13,21 +11,22 @@ import {
 import { HoursInputModal } from "../../components/HoursInputModal";
 import { ManualRegistrationModal } from "../../components/ManualRegistrationModal";
 import { MonthNavigator } from "../../components/MonthNavigator";
-import { RealTimePunch } from "../../components/RealTimePunch";
+import { formatSeconds, RealTimePunch } from "../../components/RealTimePunch";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { useWorkHours } from "../../context/WorkHoursContext";
+import { calculateRealtimeHours, toLocalDateStr } from "../../lib/utils";
+import { Marca } from "../../types/hours";
 
 export default function RegisterScreen() {
-  const { entries, currentDate, globalSeconds, userRole } =
-    useWorkHours() as any; // 🔌 CONEXIÓN BLINDADA: Envolvemos el useContext en ( ... as any) para forzar la lectura de entries y currentDate
+  const { entries, currentDate, globalSeconds, openShift } = useWorkHours();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isManualOpen, setIsManualOpen] = useState(false);
-  const router = useRouter();
+  const todayStr = toLocalDateStr();
 
   // 🎢 EL CABLE INVISIBLE: Rastreará la posición del dedo en píxeles (ej: 0 a 200px)
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // 1. ANIMACIÓN DE ALTURA: Se encoge de 460px a solo 60px
+  // 1. ANIMACIÓN DE ALTURA: Se encoge de 450px a solo 60px
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [450, 60],
@@ -63,48 +62,14 @@ export default function RegisterScreen() {
   };
 
   const renderDayItem = ({ item: dayStr }: { item: string }) => {
-    const dayData = (entries[dayStr] || null) as any;
-    const nowToday = new Date();
-    const offsetToday = nowToday.getTimezoneOffset();
-    const localDateObj = new Date(nowToday.getTime() - offsetToday * 60 * 1000);
-    const isToday = dayStr === localDateObj.toISOString().split("T")[0];
+    const dayData = entries[dayStr] || null;
+    const isToday = dayStr === todayStr;
 
-    const marcasDelDia =
-      dayData?.marcas && Array.isArray(dayData.marcas) ? dayData.marcas : [];
+    const marcasDelDia: Marca[] = dayData?.marcas ?? [];
     const isCompletado = !!(dayData?.notes || dayData?.isHolidayOrSunday);
 
-    // 🧮 CALCULADORA MULTI-TRAMOS DE ENTRADAS Y SALIDAS (AVANZA DE 2 EN 2)
-    const tiempoCalculado = (() => {
-      let totalSegundosDelDia = 0;
-
-      if (marcasDelDia.length >= 2) {
-        // Avanzamos i += 2 para saltar limpiamente de pareja en pareja (Entrada + Salida)
-        for (let i = 0; i < marcasDelDia.length; i += 2) {
-          const marcaEntrada = marcasDelDia[i];
-          const marcaSalida = marcasDelDia[i + 1];
-
-          // Validamos que existan ambos tramos y correspondan al flujo correcto
-          if (
-            marcaEntrada &&
-            marcaSalida &&
-            marcaEntrada.tipo === "ENTRADA" &&
-            marcaSalida.tipo === "SALIDA"
-          ) {
-            const t1 = new Date(marcaEntrada.timestamp).getTime();
-            const t2 = new Date(marcaSalida.timestamp).getTime();
-
-            if (!isNaN(t1) && !isNaN(t2)) {
-              totalSegundosDelDia += (t2 - t1) / 1000; // Sumamos los segundos puros trabajados
-            }
-          }
-        }
-      }
-
-      // Convertimos el total de segundos a horas decimales para mantener simetría
-      return totalSegundosDelDia > 0
-        ? totalSegundosDelDia / 3600
-        : dayData?.hours || 0;
-    })();
+    // Horas guardadas del día; si aún no hay total, se estiman de los tramos ENTRADA → SALIDA cerrados
+    const tiempoCalculado = dayData?.hours || calculateRealtimeHours(marcasDelDia).totalHours;
 
     return (
       <TouchableOpacity
@@ -216,9 +181,9 @@ export default function RegisterScreen() {
                 Sin marcas de tiempo real
               </Text>
             ) : (
-              marcasDelDia.map((punch: any, idx: number) => {
+              marcasDelDia.map((punch, idx) => {
                 const esEntrada = punch.tipo === "ENTRADA";
-                const esManual = punch.tipo === "MANUAL";
+                const esManual = punch.tipo === "MANUAL" || punch.tipo === "MANUAL_JORNADA";
 
                 // Normalizamos visualmente cualquier variación para que pinte "Entra" o "Sale"
                 const etiquetaTipo = esManual
@@ -269,27 +234,26 @@ export default function RegisterScreen() {
 
           {/* ⏱️ COLUMNA DERECHA FIJA: Cápsula inteligente multi-escala */}
 
-          {marcasDelDia.length >
-            0 /*|| (dayData?.hours && dayData.hours > 0)*/ && (
+          {marcasDelDia.length > 0 && (
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
               {/* Activamos el mapa si alguna marca real tiene coordenadas GPS registradas O si es un registro manual */}
               {(marcasDelDia.some(
-                (m: any) => m.latitude !== undefined && m.latitude !== null,
+                (m) => m.latitude !== undefined && m.latitude !== null,
               ) ||
-                marcasDelDia.some((m: any) => m.tipo === "MANUAL")) && (
+                marcasDelDia.some((m) => m.tipo === "MANUAL")) && (
                 <View
                   style={{
                     // Si alguna marca tiene latitud, asumimos que fue ponchado con GPS (Color Verde/Celeste)
-                    backgroundColor: marcasDelDia.some((m: any) => m.latitude)
+                    backgroundColor: marcasDelDia.some((m) => m.latitude)
                       ? "rgba(0, 245, 212, 0.1)"
                       : "rgba(141, 153, 174, 0.1)",
                     paddingHorizontal: 10,
                     paddingVertical: 12.2,
                     borderRadius: 10,
                     borderWidth: 1,
-                    borderColor: marcasDelDia.some((m: any) => m.latitude)
+                    borderColor: marcasDelDia.some((m) => m.latitude)
                       ? "rgba(0, 245, 212, 0.2)"
                       : "rgba(141, 153, 174, 0.2)",
                     minWidth: 30,
@@ -301,7 +265,7 @@ export default function RegisterScreen() {
                     name="map"
                     size={20}
                     color={
-                      marcasDelDia.some((m: any) => m.latitude)
+                      marcasDelDia.some((m) => m.latitude)
                         ? "#00f5d4"
                         : "#8d99ae"
                     }
@@ -325,7 +289,14 @@ export default function RegisterScreen() {
                   const totalSegundos = tiempoCalculado * 3600;
                   const totalMinutos = tiempoCalculado * 60;
 
-                  if (totalSegundos < 60) {
+                  if (totalSegundos <= 0) {
+                    // Turno abierto sin tramos cerrados todavía
+                    return (
+                      <Text style={{ fontSize: 12, color: "#00f5d4", fontWeight: "800" }}>
+                        {openShift?.date === dayStr ? "En curso" : "—"}
+                      </Text>
+                    );
+                  } else if (totalSegundos < 60) {
                     // ⚡ Escala Segundos (Menor a 1 minuto)
                     return (
                       <>
@@ -337,7 +308,7 @@ export default function RegisterScreen() {
                             fontVariant: ["tabular-nums"],
                           }}
                         >
-                          {Math.max(1, Math.round(totalSegundos))}s
+                          {Math.round(totalSegundos)}s
                         </Text>
                         <Text
                           style={{
@@ -436,9 +407,7 @@ export default function RegisterScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#0b132b" }}>
       <ScreenContainer>
-        <Stack.Screen options={{ headerShown: false }} />
-
-        {/* 🧥 CONTENEDOR ANIMADO SUPERIOR: Se encoge de 500px a 60px al deslizar el dedo */}
+        {/* 🧥 CONTENEDOR ANIMADO SUPERIOR: Se encoge de 450px a 60px al deslizar el dedo */}
         <Animated.View
           style={{
             height: headerHeight,
@@ -494,14 +463,7 @@ export default function RegisterScreen() {
                 fontVariant: ["tabular-nums"],
               }}
             >
-              {globalSeconds > 0
-                ? (() => {
-                    const hrs = Math.floor(globalSeconds / 3600);
-                    const mins = Math.floor((globalSeconds % 3600) / 60);
-                    const secs = globalSeconds % 60;
-                    return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-                  })()
-                : "00:00:00"}
+              {formatSeconds(globalSeconds)}
             </Text>
           </Animated.View>
         </Animated.View>
@@ -518,7 +480,7 @@ export default function RegisterScreen() {
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: false }, // Obligatorio en false para animar la altura (height)
           )}
-          ListHeaderComponent={() => (
+          ListHeaderComponent={
             <View style={{ backgroundColor: "#0b132b", paddingTop: 12 }}>
               {/* CABECERA PREMIUM */}
               <View
@@ -537,14 +499,13 @@ export default function RegisterScreen() {
                     letterSpacing: -0.5,
                   }}
                 >
-                  Registro
+                  Inicio
                 </Text>
               </View>
               {/* El navegador de meses va aquí arriba del primer día de la lista */}
               <MonthNavigator />
-
             </View>
-          )}
+          }
         />
 
         <HoursInputModal
@@ -572,29 +533,7 @@ export default function RegisterScreen() {
   );
 }
 
-// 2. EL DICCIONARIO DE ESTILOS QUE HACÍA FALTA ABAJO DEL TODO
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 4,
-    paddingBottom: 4,
-    backgroundColor: "#0b132b",
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#ffffff",
-    letterSpacing: -0.5,
-  },
-  settingsButton: {
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: "#1c2541",
-    borderWidth: 1,
-    borderColor: "#3a4f7c30",
-  },
   floatingButton: {
     position: "absolute",
     bottom: 24,

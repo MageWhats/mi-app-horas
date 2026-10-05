@@ -1,10 +1,37 @@
 import { useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, deleteUser, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-// @ts-ignore
+import { ActivityIndicator, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SelectField } from '../components/SelectField';
+import { mostrarAlerta } from '../lib/alert';
 import { auth, db } from '../lib/firebase';
+
+const OPCIONES_TIPO_ID = [
+  { value: 'CC', label: 'Cédula de Ciudadanía (CC)' },
+  { value: 'CE', label: 'Cédula de Extranjería (CE)' },
+  { value: 'PPT', label: 'Permiso por Protección Temporal (PPT)' },
+  { value: 'PAS', label: 'Pasaporte' },
+];
+const OPCIONES_TIPO_ID_CONYUGE = OPCIONES_TIPO_ID.filter((o) => o.value !== 'PAS');
+const OPCIONES_TIPO_ID_HIJO = [
+  { value: 'RC', label: 'Registro Civil (RC)' },
+  { value: 'TI', label: 'Tarjeta de Identidad (TI)' },
+  { value: 'CC', label: 'Cédula de Ciudadanía (CC)' },
+];
+const OPCIONES_GENERO = ['Masculino', 'Femenino', 'No Binario'].map((v) => ({ value: v, label: v }));
+const OPCIONES_ESTADO_CIVIL = ['Soltero/a', 'Casado/a', 'Unión Libre', 'Divorciado/a', 'Viudo/a'].map((v) => ({ value: v, label: v }));
+const OPCIONES_ESTUDIO = [
+  { value: 'Primaria', label: 'Primaria' },
+  { value: 'Bachillerato', label: 'Bachillerato Completo' },
+  { value: 'Técnico', label: 'Técnico' },
+  { value: 'Tecnólogo', label: 'Tecnólogo' },
+  { value: 'Profesional', label: 'Profesional / Universitario' },
+  { value: 'Especialización/Postgrado', label: 'Especialización / Postgrado' },
+];
+
+const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const esFechaValida = (txt: string) => FECHA_REGEX.test(txt) && !isNaN(new Date(txt + 'T00:00:00').getTime());
 
 // Interfaces estructurales de TypeScript
 interface HijoData {
@@ -27,7 +54,6 @@ export default function AdvancedRegister() {
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState(''); // Formato AAAA-MM-DD
-  const [numeroHijos, setNumeroHijos] = useState('0');
   const [direccion, setDireccion] = useState('');
   const [barrio, setBarrio] = useState('');
   const [urbanizacion, setUrbanizacion] = useState('');
@@ -61,19 +87,17 @@ export default function AdvancedRegister() {
   const [tmpHijoApellidos, setTmpHijoApellidos] = useState('');
   const [tmpHijoFechaNacimiento, setTmpHijoFechaNacimiento] = useState('');
 
-  const mostrarAlerta = (titulo: string, mensaje: string) => {
-    if (Platform.OS === 'web') {
-      // Si corre en Vercel o localhost, usa el cuadro nativo del navegador
-      window.alert(`${titulo}: ${mensaje}`);
-    } else {
-      // Si corre en Android o iOS, dispara el modal nativo del celular
-      Alert.alert(titulo, mensaje);
-    }
-  };
-
   const agregarHijoALista = () => {
     if (!tmpHijoCedula.trim() || !tmpHijoNombres.trim() || !tmpHijoApellidos.trim() || !tmpHijoFechaNacimiento.trim()) {
       mostrarAlerta('Campos incompletos', 'Por favor ingresa todos los datos del hijo.');
+      return;
+    }
+    if (!esFechaValida(tmpHijoFechaNacimiento.trim())) {
+      mostrarAlerta('Fecha inválida', 'La fecha de nacimiento debe tener el formato AAAA-MM-DD.');
+      return;
+    }
+    if (listaHijos.some((h) => h.id === tmpHijoCedula.trim())) {
+      mostrarAlerta('Hijo duplicado', 'Ya agregaste un hijo con ese número de identificación.');
       return;
     }
     const nuevoHijo: HijoData = {
@@ -84,38 +108,66 @@ export default function AdvancedRegister() {
       fechaNacimiento: tmpHijoFechaNacimiento.trim()
     };
     setListaHijos([...listaHijos, nuevoHijo]);
-    setNumeroHijos(String(listaHijos.length + 1));
 
     // Limpiar temporales
     setTmpHijoCedula(''); setTmpHijoNombres(''); setTmpHijoApellidos(''); setTmpHijoFechaNacimiento('');
     setModalHijoVisible(false);
   };
 
+  const validarPaso1 = (): string | null => {
+    if (!cedula.trim() || !nombres.trim() || !apellidos.trim() || !correo.trim() || !password.trim() || !fechaExpedicion.trim()) {
+      return 'Por favor ingresa todos los datos obligatorios.';
+    }
+    if (!/^\S+@\S+\.\S+$/.test(correo.trim())) return 'El correo electrónico no es válido.';
+    if (password.length < 6) return 'La contraseña debe tener mínimo 6 caracteres.';
+    if (!esFechaValida(fechaExpedicion.trim())) return 'La fecha de expedición debe tener el formato AAAA-MM-DD.';
+    if (fechaNacimiento.trim() && !esFechaValida(fechaNacimiento.trim())) return 'La fecha de nacimiento debe tener el formato AAAA-MM-DD.';
+    return null;
+  };
+
+  const traducirErrorAuth = (code?: string) => {
+    switch (code) {
+      case 'auth/email-already-in-use': return 'Ese correo ya está registrado. Inicia sesión o usa otro correo.';
+      case 'auth/invalid-email': return 'El correo electrónico no es válido.';
+      case 'auth/weak-password': return 'La contraseña es muy débil (mínimo 6 caracteres).';
+      case 'auth/network-request-failed': return 'Sin conexión. Revisa tu red e inténtalo de nuevo.';
+      default: return 'No se pudo completar el registro. Inténtalo de nuevo.';
+    }
+  };
+
   const handleFinalizarPreregistro = async () => {
-    if (!correo.trim() || !password.trim()) {
-      mostrarAlerta('Campos incompletos', 'Por favor ingresa tu correo y contraseña.');
+    const errorValidacion = validarPaso1();
+    if (errorValidacion) {
+      mostrarAlerta('Revisa tus datos', errorValidacion);
+      setStep(1);
       return;
     }
 
+    const cedulaLimpia = cedula.trim();
     try {
       setLoading(true);
 
-      // 1. Crear el usuario en Firebase Authentication
-      // @ts-ignore
-      const userCredential = await createUserWithEmailAndPassword(auth, correo.trim(), password);
-      const uidAuth = userCredential.user.uid;
+      // 1. La cédula es la llave del documento: si ya existe, no se puede sobrescribir otro perfil
+      const existente = await getDoc(doc(db, 'users', cedulaLimpia));
+      if (existente.exists()) {
+        mostrarAlerta('Cédula ya registrada', 'Ya existe un operario con este número de identificación. Si es tu cuenta, inicia sesión.');
+        return;
+      }
 
-      // 2. Estructurar documento maestro NoSQL indexado por CÉDULA
+      // 2. Crear el usuario en Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, correo.trim(), password);
+
+      // 3. Documento maestro indexado por CÉDULA
       const nuevoOperarioDocumento = {
-        uid: uidAuth,
-        cedula: cedula.trim(),
+        uid: userCredential.user.uid,
+        cedula: cedulaLimpia,
         fullName: `${nombres.trim()} ${apellidos.trim()}`,
         email: correo.trim().toLowerCase(),
-        status: 'PENDIENTE', // Marcado como Preregistro incompleto para Nómina
+        status: 'PENDIENTE', // Preregistro incompleto para Nómina
         role: 'operario',
         position: 'OPERARIO / PENDIENTE',
         datosGenerales: {
-          tipoId, nombres, apellidos, fechaNacimiento, numeroHijos: Number(numeroHijos),
+          tipoId, nombres: nombres.trim(), apellidos: apellidos.trim(), fechaNacimiento, numeroHijos: listaHijos.length,
           direccion, barrio, urbanizacion, aptoCasa, celular, genero,
           estadoCivil, nivelEstudio, lugarNacimiento, lugarExpedicion, fechaExpedicion
         },
@@ -130,23 +182,28 @@ export default function AdvancedRegister() {
         hijos: listaHijos
       };
 
-      // 3. Persistir en la colección /users de Firestore
-      await setDoc(doc(db, 'users', cedula.trim()), nuevoOperarioDocumento);
+      try {
+        await setDoc(doc(db, 'users', cedulaLimpia), nuevoOperarioDocumento);
+      } catch (error) {
+        // Sin perfil en Firestore la cuenta no sirve para iniciar sesión: la deshacemos para permitir reintentar
+        await deleteUser(userCredential.user).catch(() => undefined);
+        throw error;
+      }
 
+      // createUserWithEmailAndPassword deja la sesión abierta; la cerramos para que el operario entre por el login
+      await signOut(auth);
       mostrarAlerta('Registro Exitoso', 'Tu preregistro ha sido completado. Ahora puedes iniciar sesión.');
       router.replace('/login');
 
     } catch (error: any) {
       console.error(error);
-      mostrarAlerta('Fallo de Registro', error.message || 'Error de red.');
+      mostrarAlerta('Fallo de Registro', traducirErrorAuth(error?.code));
     } finally {
       setLoading(false);
     }
   };
 
   const inputStyle = { backgroundColor: '#1f2937', color: '#ffffff', padding: 12, borderRadius: 10, fontSize: 14, marginBottom: 12 };
-  const selectWrapperStyle = { backgroundColor: '#1f2937', borderRadius: 10, marginBottom: 12, paddingHorizontal: 4 };
-  const selectStyle = { backgroundColor: 'transparent', color: '#ffffff', width: '100%', padding: 12, border: 'none', outline: 'none', fontSize: 14 };
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#090d16' }} contentContainerStyle={{ padding: 20, maxWidth: 600, width: '100%', alignSelf: 'center' }}>
@@ -165,14 +222,7 @@ export default function AdvancedRegister() {
           <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: 'bold', marginBottom: 14 }}>1. DATOS GENERALES DEL EMPLEADO</Text>
 
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>TIPO DE IDENTIFICACIÓN</Text>
-          <View style={selectWrapperStyle}>
-            <select value={tipoId} onChange={(e: any) => setTipoId(e.target.value)} style={selectStyle}>
-              <option value="CC" style={{ background: '#111827' }}>Cédula de Ciudadanía (CC)</option>
-              <option value="CE" style={{ background: '#111827' }}>Cédula de Extranjería (CE)</option>
-              <option value="PPT" style={{ background: '#111827' }}>Permiso por Protección Temporal (PPT)</option>
-              <option value="PAS" style={{ background: '#111827' }}>Pasaporte</option>
-            </select>
-          </View>
+          <SelectField value={tipoId} onChange={setTipoId} options={OPCIONES_TIPO_ID} />
 
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>NÚMERO DE IDENTIFICACIÓN (SOLO NÚMEROS)</Text>
           <TextInput keyboardType="numeric" value={cedula} onChangeText={(txt) => setCedula(txt.replace(/[^0-9]/g, ''))} style={inputStyle} placeholder="Ej: 100774423" placeholderTextColor="#4b5563" />
@@ -180,7 +230,6 @@ export default function AdvancedRegister() {
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>LUGAR DE EXPEDICIÓN</Text>
           <TextInput value={lugarExpedicion} onChangeText={setLugarExpedicion} style={inputStyle} placeholder="Municipio de expedición" placeholderTextColor="#4b5563" />
 
-          {/* CAMPO NUEVO: FECHA DE EXPEDICIÓN (Agrégalo justo aquí) */}
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>FECHA DE EXPEDICIÓN DE LA IDENTIFICACIÓN (AAAA-MM-DD)</Text>
           <TextInput
             value={fechaExpedicion}
@@ -202,37 +251,13 @@ export default function AdvancedRegister() {
           <TextInput value={lugarNacimiento} onChangeText={setLugarNacimiento} style={inputStyle} placeholder="Ciudad / Municipio" placeholderTextColor="#4b5563" />
 
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>GÉNERO</Text>
-          <View style={selectWrapperStyle}>
-            <select value={genero} onChange={(e: any) => setGenero(e.target.value)} style={selectStyle}>
-              <option value="Masculino" style={{ background: '#111827' }}>Masculino</option>
-              <option value="Femenino" style={{ background: '#111827' }}>Femenino</option>
-              <option value="No Binario" style={{ background: '#111827' }}>No Binario</option>
-            </select>
-          </View>
+          <SelectField value={genero} onChange={setGenero} options={OPCIONES_GENERO} />
 
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>ESTADO CIVIL</Text>
-          <View style={selectWrapperStyle}>
-            <select value={estadoCivil} onChange={(e: any) => setEstadoCivil(e.target.value)} style={selectStyle}>
-              <option value="Soltero/a" style={{ background: '#111827' }}>Soltero/a</option>
-              <option value="Casado/a" style={{ background: '#111827' }}>Casado/a</option>
-              <option value="Unión Libre" style={{ background: '#111827' }}>Unión Libre</option>
-              <option value="Divorciado/a" style={{ background: '#111827' }}>Divorciado/a</option>
-              <option value="Viudo/a" style={{ background: '#111827' }}>Viudo/a</option>
-
-            </select>
-          </View>
+          <SelectField value={estadoCivil} onChange={setEstadoCivil} options={OPCIONES_ESTADO_CIVIL} />
 
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>NIVEL DE ESTUDIOS</Text>
-          <View style={selectWrapperStyle}>
-            <select value={nivelEstudio} onChange={(e: any) => setNivelEstudio(e.target.value)} style={selectStyle}>
-              <option value="Primaria" style={{ background: '#111827' }}>Primaria</option>
-              <option value="Bachillerato" style={{ background: '#111827' }}>Bachillerato Completo</option>
-              <option value="Técnico" style={{ background: '#111827' }}>Técnico</option>
-              <option value="Tecnólogo" style={{ background: '#111827' }}>Tecnólogo</option>
-              <option value="Profesional" style={{ background: '#111827' }}>Profesional / Universitario</option>
-              <option value="Especialización/Postgrado" style={{ background: '#111827' }}>Especialización / Postgrado</option>
-            </select>
-          </View>
+          <SelectField value={nivelEstudio} onChange={setNivelEstudio} options={OPCIONES_ESTUDIO} />
 
 
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>NÚMERO DE CELULAR DE CONTACTO</Text>
@@ -268,11 +293,11 @@ export default function AdvancedRegister() {
 
 
 
-          {/* BOTÓN PARA CAMBIAR AL PASO 2 (Agrégalo aquí) */}
           <TouchableOpacity
             onPress={() => {
-              if (!cedula.trim() || !nombres.trim() || !apellidos.trim() || !correo.trim() || !password.trim() || !fechaExpedicion.trim()) {
-                mostrarAlerta('Campos incompletos', 'Por favor ingresa todos los datos.');
+              const errorValidacion = validarPaso1();
+              if (errorValidacion) {
+                mostrarAlerta('Revisa tus datos', errorValidacion);
                 return;
               }
               setStep(2);
@@ -282,10 +307,9 @@ export default function AdvancedRegister() {
             <Text style={{ color: '#ffffff', textAlign: 'center', fontWeight: 'bold' }}>Siguiente: Núcleo Familiar</Text>
           </TouchableOpacity>
         </View>
-      )} {/* <- ESTA LLAVE CIERRA EL CONTEXTO DEL STEP 1 */}
+      )}
 
 
-      {/* Pega esto justo antes del condicional de tieneConyuge */}
       {step === 2 && (
         <View style={{ backgroundColor: '#111827', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#1f2937' }}>
           <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: 'bold', marginBottom: 14 }}>2. INFORMACIÓN DEL CÓNYUGE / COMPAÑERO/A</Text>
@@ -306,17 +330,10 @@ export default function AdvancedRegister() {
             </Text>
           </TouchableOpacity>
 
-          {tieneConyuge && ( // Aquí continúa tu código de la página 12
-
+          {tieneConyuge && (
             <View style={{ marginTop: 12 }}>
               <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>TIPO DE IDENTIFICACIÓN CÓNYUGE</Text>
-              <View style={selectWrapperStyle}>
-                <select value={conyugeTipoId} onChange={(e: any) => setConyugeTipoId(e.target.value)} style={selectStyle}>
-                  <option value="CC" style={{ background: '#111827' }}>Cédula de Ciudadanía (CC)</option>
-                  <option value="CE" style={{ background: '#111827' }}>Cédula de Extranjería (CE)</option>
-                  <option value="PPT" style={{ background: '#111827' }}>Permiso por Protección Temporal (PPT)</option>
-                </select>
-              </View>
+              <SelectField value={conyugeTipoId} onChange={setConyugeTipoId} options={OPCIONES_TIPO_ID_CONYUGE} />
 
               <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4 }}>NÚMERO DE IDENTIFICACIÓN CÓNYUGE</Text>
               <TextInput keyboardType="numeric" value={conyugeCedula} onChangeText={(txt) => setConyugeCedula(txt.replace(/[^0-9]/g, ''))} style={inputStyle} placeholder="Cédula cónyuge" placeholderTextColor="#4b5563" />
@@ -340,7 +357,7 @@ export default function AdvancedRegister() {
             <TouchableOpacity onPress={() => setStep(3)} style={{ flex: 1, backgroundColor: '#3b82f6', padding: 14, borderRadius: 10 }}>
               <Text style={{ color: '#ffffff', textAlign: 'center', fontWeight: 'bold' }}>Siguiente: Hijos</Text>
             </TouchableOpacity>
-          </View> {/* <- AGREGA ESTE CIERRE DE VIEW AQUÍ */}
+          </View>
         </View>
       )}
 
@@ -353,8 +370,8 @@ export default function AdvancedRegister() {
           <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 16 }}>Hijos agregados: {listaHijos.length}</Text>
 
           {/* Listado Reactivo de Hijos en cola */}
-          {listaHijos.map((h, idx) => (
-            <View key={idx} style={{ backgroundColor: '#1f2937', padding: 12, borderRadius: 10, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          {listaHijos.map((h) => (
+            <View key={h.id} style={{ backgroundColor: '#1f2937', padding: 12, borderRadius: 10, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View>
                 <Text style={{ color: '#ffffff', fontWeight: '600' }}>{h.nombres} {h.apellidos}</Text>
                 <Text style={{ color: '#9ca3af', fontSize: 12 }}>{h.tipoId}: {h.id} • Nacido: {h.fechaNacimiento}</Text>
@@ -362,7 +379,6 @@ export default function AdvancedRegister() {
               <TouchableOpacity onPress={() => {
                 const filtrados = listaHijos.filter(item => item.id !== h.id);
                 setListaHijos(filtrados);
-                setNumeroHijos(String(filtrados.length));
               }}><Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 12 }}>Quitar</Text></TouchableOpacity>
             </View>
           ))}
@@ -383,19 +399,13 @@ export default function AdvancedRegister() {
       {/* ==========================================
           MODAL FLOTANTE INTERACTIVO PARA HIJO
           ========================================== */}
-      <Modal visible={modalHijoVisible} transparent={true} animationType="fade">
+      <Modal visible={modalHijoVisible} transparent={true} animationType="fade" onRequestClose={() => setModalHijoVisible(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}>
           <View style={{ backgroundColor: '#111827', padding: 24, borderRadius: 20, borderWidth: 1, borderColor: '#1f2937', maxWidth: 450, width: '100%', alignSelf: 'center' }}>
             <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: 'bold', marginBottom: 16 }}>Formulario de Registro - Hijo</Text>
 
             <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 4 }}>TIPO DE IDENTIFICACIÓN</Text>
-            <View style={selectWrapperStyle}>
-              <select value={tmpHijoTipoId} onChange={(e: any) => setTmpHijoTipoId(e.target.value)} style={selectStyle}>
-                <option value="RC">Registro Civil (RC)</option>
-                <option value="TI">Tarjeta de Identidad (TI)</option>
-                <option value="CC">Cédula de Ciudadanía (CC)</option>
-              </select>
-            </View>
+            <SelectField value={tmpHijoTipoId} onChange={setTmpHijoTipoId} options={OPCIONES_TIPO_ID_HIJO} />
 
             <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 4 }}>IDENTIFICACIÓN (SOLO NÚMEROS)</Text>
             <TextInput keyboardType="numeric" value={tmpHijoCedula} onChangeText={(txt) => setTmpHijoCedula(txt.replace(/[^0-9]/g, ''))} style={inputStyle} placeholder="Documento hijo" placeholderTextColor="#4b5563" />
@@ -407,7 +417,7 @@ export default function AdvancedRegister() {
             <TextInput value={tmpHijoApellidos} onChangeText={setTmpHijoApellidos} style={inputStyle} placeholder="Apellidos" placeholderTextColor="#4b5563" />
 
             <Text style={{ color: '#9ca3af', fontSize: 11, marginBottom: 4 }}>FECHA DE NACIMIENTO (AAAA-MM-DD)</Text>
-            <TextInput value={tmpHijoFechaNacimiento} onChangeText={setTmpHijoFechaNacimiento} style={inputStyle} />
+            <TextInput value={tmpHijoFechaNacimiento} onChangeText={setTmpHijoFechaNacimiento} style={inputStyle} placeholder="Ej: 2015-03-10" placeholderTextColor="#4b5563" />
 
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
               <TouchableOpacity onPress={() => setModalHijoVisible(false)} style={{ flex: 1, backgroundColor: '#374151', padding: 12, borderRadius: 10 }}><Text style={{ color: '#ffffff', textAlign: 'center' }}>Cancelar</Text></TouchableOpacity>

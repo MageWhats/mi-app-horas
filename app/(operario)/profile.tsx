@@ -1,9 +1,12 @@
-// app/(tabs)/profile.tsx
-import { Stack } from 'expo-router';
+// app/(operario)/profile.tsx
+import { signOut, updatePassword } from 'firebase/auth';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { TabBarIcon } from '../../components/TabBarIcon';
+import { mostrarAlerta } from '../../lib/alert';
+import { auth, db } from '../../lib/firebase';
 
 export default function ProfileScreen() {
   // Estados para almacenar los datos del operario traídos de Firestore
@@ -20,32 +23,16 @@ export default function ProfileScreen() {
 
     const fetchUserProfile = async () => {
       try {
-        const { auth, db } = require('../../lib/firebase');
-        const { doc, getDoc, collection, query, where, getDocs } = require('firebase/firestore');
-
         const currentUser = auth.currentUser;
-        if (!currentUser) {
-          setLoading(false);
-          return;
-        }
+        if (!currentUser) return;
 
-        // Buscamos el documento en la colección 'users' donde el email coincida con el de la sesión
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', currentUser.email));
+        // Los perfiles se guardan con la cédula como id; se localizan por el uid de la sesión
+        const q = query(collection(db, 'users'), where('uid', '==', currentUser.uid), limit(1));
         const querySnapshot = await getDocs(q);
 
-        if (!querySnapshot.empty) {
+        if (!querySnapshot.empty && isMounted) {
           const docSnap = querySnapshot.docs[0];
-          if (isMounted) {
-            setUserData({ id: docSnap.id, ...docSnap.data() });
-          }
-        } else {
-          // Si no se encuentra por email, intentamos buscar directamente por UID por si acaso
-          const docRef = doc(db, 'users', currentUser.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists() && isMounted) {
-            setUserData({ id: docSnap.id, ...docSnap.data() });
-          }
+          setUserData({ id: docSnap.id, ...docSnap.data() });
         }
       } catch (error) {
         console.error("Error al cargar el perfil en vivo: ", error);
@@ -61,50 +48,45 @@ export default function ProfileScreen() {
   // 2. LÓGICA DE ACTUALIZACIÓN DE CONTRASEÑA
   const handleChangePassword = async () => {
     if (!newPassword.trim()) {
-      alert('Por favor ingresa una nueva contraseña.');
+      mostrarAlerta('Por favor ingresa una nueva contraseña.');
       return;
     }
     if (newPassword.length < 6) {
-      alert('La nueva contraseña debe tener un mínimo de 6 caracteres.');
+      mostrarAlerta('La nueva contraseña debe tener un mínimo de 6 caracteres.');
+      return;
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      mostrarAlerta('No hay una sesión activa para realizar esta acción.');
       return;
     }
 
     setUpdatingPassword(true);
     try {
-      const { auth } = require('../../lib/firebase');
-      const { updatePassword } = require('firebase/auth');
-
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        await updatePassword(currentUser, newPassword.trim());
-        setNewPassword('');
-        alert('¡Contraseña actualizada con éxito en el sistema de seguridad!');
-      } else {
-        alert('No hay una sesión activa para realizar esta acción.');
-      }
+      // Sin trim: la contraseña se guarda exactamente como se escribió
+      await updatePassword(currentUser, newPassword);
+      setNewPassword('');
+      mostrarAlerta('Contraseña actualizada con éxito.');
     } catch (error: any) {
       console.error("Error al cambiar contraseña: ", error);
       if (error.code === 'auth/requires-recent-login') {
-        alert('Por seguridad, esta acción requiere que hayas iniciado sesión recientemente. Por favor, cierra sesión y vuelve a ingresar.');
+        mostrarAlerta('Por seguridad, esta acción requiere que hayas iniciado sesión recientemente. Cierra sesión y vuelve a ingresar.');
       } else {
-        alert('No se pudo cambiar la contraseña. Inténtalo de nuevo más tarde.');
+        mostrarAlerta('No se pudo cambiar la contraseña. Inténtalo de nuevo más tarde.');
       }
     } finally {
       setUpdatingPassword(false);
     }
   };
 
-  // 3. LÓGICA DE CIERRE DE SESIÓN SEGURO
+  // El guardián de app/_layout.tsx redirige al login al detectar el cierre de sesión
   const handleSignOut = async () => {
     try {
-      const { auth } = require('../../lib/firebase');
-      const { signOut } = require('firebase/auth');
       await signOut(auth);
-      if (Platform.OS === 'web') {
-        alert('Sesión cerrada correctamente.');
-      }
     } catch (error) {
       console.error("Error al cerrar sesión: ", error);
+      mostrarAlerta('No se pudo cerrar la sesión.');
     }
   };
 
@@ -131,8 +113,6 @@ export default function ProfileScreen() {
 
   return (
     <ScreenContainer>
-      <Stack.Screen options={{ headerShown: false }} />
-
       {/* Cabecera unificada ultra compacta */}
       <View style={styles.headerRow}>
         <Text style={styles.headerTitle}>Mi Perfil</Text>

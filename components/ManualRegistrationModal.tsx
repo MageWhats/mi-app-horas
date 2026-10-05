@@ -1,6 +1,6 @@
 // components/ManualRegistrationModal.tsx
 import DateTimePicker from "@react-native-community/datetimepicker";
-import React, { useContext, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -12,7 +12,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { WorkHoursContext } from "../context/WorkHoursContext";
+import { useWorkHours } from "../context/WorkHoursContext";
+import { mostrarAlerta } from "../lib/alert";
+import { getRecargoDominical, toLocalDateStr } from "../lib/utils";
 
 interface ManualRegistrationModalProps {
   isOpen: boolean;
@@ -20,7 +22,7 @@ interface ManualRegistrationModalProps {
 }
 
 export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = ({ isOpen, onClose }) => {
-  const { saveDayEntry, currentDate } = useContext(WorkHoursContext) as any;
+  const { addManualEntry, currentDate } = useWorkHours();
 
   // Estados del formulario manual existentes
   const [selectedDay, setSelectedDay] = useState("");
@@ -43,98 +45,80 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
   const [esFestivoJornada, setEsFestivoJornada] = useState(false);
 
   // Genera la lista de días del mes actual para el selector desplegable
-  const year = currentDate ? currentDate.getFullYear() : new Date().getFullYear();
-  const month = currentDate ? currentDate.getMonth() : new Date().getMonth();
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
   const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
   const daysArray = Array.from({ length: totalDaysInMonth }, (_, i) => {
     const dayNum = i + 1;
     return `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
   });
 
+  const resetForm = () => {
+    setStartHour("");
+    setEndHour("");
+    setHorasJornadaDirecta("8");
+    setEsFestivoJornada(false);
+    setNotes("");
+    setSelectedDay("");
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
   const handleSaveManual = async () => {
     if (!selectedDay) {
-      alert("⚠️ Por favor selecciona el día que vas a registrar.");
+      mostrarAlerta("Selecciona el día que vas a registrar.");
       return;
     }
 
+    const horasNetas = Number(horasJornadaDirecta);
     if (modoRegistro === 'HORARIO' && (!startHour || !endHour)) {
-      alert("⚠️ Por favor digita las horas de Entrada y Salida.");
+      mostrarAlerta("Digita las horas de entrada y salida.");
       return;
     }
-
-    if (modoRegistro === 'JORNADA' && (!horasJornadaDirecta || Number(horasJornadaDirecta) <= 0)) {
-      alert("⚠️ Por favor ingresa una cantidad válida de horas para la jornada.");
+    if (modoRegistro === 'HORARIO' && startHour.trim() === endHour.trim()) {
+      mostrarAlerta("La hora de entrada y la de salida no pueden ser iguales.");
+      return;
+    }
+    if (modoRegistro === 'JORNADA' && (!horasNetas || horasNetas <= 0 || horasNetas > 24)) {
+      mostrarAlerta("Ingresa una cantidad válida de horas (entre 0 y 24).");
       return;
     }
 
     setLoading(true);
     try {
-      let manualPayload: any = {};
       const esDomingo = new Date(selectedDay + "T00:00:00").getDay() === 0;
+      const isHolidayOrSunday = esFestivoJornada || esDomingo;
+      const extra = notes.trim() ? ` ${notes.trim()}` : "";
 
       if (modoRegistro === 'HORARIO') {
-        const cleanStart = startHour.trim();
-        const cleanEnd = endHour.trim();
-        const horaLegible = `${cleanStart} - ${cleanEnd}`;
-
-        manualPayload = {
-          date: selectedDay,
-          startTime: cleanStart,
-          endTime: cleanEnd,
-          isHolidayOrSunday: esFestivoJornada || esDomingo,
-          notes: notes.trim() ? `[Ajuste Manual Horario] ${notes.trim()}` : "[Ajuste Manual Horario]",
-          nuevaMarca:{
-            id: `manual-${Date.now()}`,
-            tipo: "MANUAL",
-            hora: horaLegible,
-            horaIngreso: cleanStart,
-            horaSalida: cleanEnd,
-            zona: "Registro Manual",
-            timestamp: new Date().toISOString(),
-          },
-        };
+        await addManualEntry(
+          selectedDay,
+          { mode: 'HORARIO', startTime: startHour.trim(), endTime: endHour.trim() },
+          { isHolidayOrSunday, notes: `[Ajuste Manual Horario]${extra}` },
+        );
       } else {
-        // MODO JORNADA DIRECTA: Inyecta las horas netas sin cálculos de reloj
-        const horasNetas = Number(horasJornadaDirecta);
-        manualPayload = {
-          date: selectedDay,
-          totalHours: horasNetas, // El motor de tu nomina.tsx leerá esto directo
-          isHolidayOrSunday: esFestivoJornada || esDomingo, // Si activa el botón o es domingo, se marca festivo
-          notes: notes.trim() ? `[Jornada Directa: ${horasNetas}h] ${notes.trim()}` : `[Jornada Directa: ${horasNetas}h]`,
-          marcas: [
-            {
-              id: `jornada-${Date.now()}`,
-              tipo: "MANUAL_JORNADA",
-              hora: `${horasNetas} Horas Netas`,
-              zona: "Registro Jornada Faena",
-              totalHours: horasNetas,
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        };
+        await addManualEntry(
+          selectedDay,
+          { mode: 'JORNADA', hours: horasNetas },
+          { isHolidayOrSunday, notes: `[Jornada Directa: ${horasNetas}h]${extra}` },
+        );
       }
 
-      await saveDayEntry(manualPayload as any);
-      alert("¡Registro manual inyectado con éxito en la planilla, mi rey! 🚀");
-
-      // Limpiamos el formulario
-      setStartHour("");
-      setEndHour("");
-      setHorasJornadaDirecta("8");
-      setEsFestivoJornada(false);
-      setNotes("");
-      setSelectedDay("");
-      onClose();
+      mostrarAlerta("Registro manual guardado");
+      handleClose();
     } catch (error) {
       console.error("Error en guardado manual:", error);
-      alert("No se pudo guardar el registro manual.");
+      mostrarAlerta("No se pudo guardar el registro manual", "Revisa tu conexión e inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={isOpen} animationType="slide" transparent={true} onRequestClose={onClose}>
+    <Modal visible={isOpen} animationType="slide" transparent={true} onRequestClose={handleClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
           {/* Cabecera */}
@@ -177,7 +161,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                 <View>
                   <TouchableOpacity onPress={() => setShowAndroidPicker(true)} style={styles.textInput} activeOpacity={0.7}>
                     <Text style={{ color: selectedDay ? "#ffffff" : "#4f5d75", fontSize: 14, paddingTop: 10 }}>
-                      {selectedDay ? `📆 Fecha seleccionada: ${selectedDay}` : "Touch para elegir fecha... "}
+                      {selectedDay ? `📆 Fecha seleccionada: ${selectedDay}` : "Toca para elegir la fecha..."}
                     </Text>
                   </TouchableOpacity>
                   {showAndroidPicker && (
@@ -187,12 +171,11 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                       display="default"
                       minimumDate={new Date(year, month, 1)}
                       maximumDate={new Date(year, month, totalDaysInMonth)}
-                      onChange={(event, date) => {
+                      onChange={(_event, date) => {
                         setShowAndroidPicker(false);
                         if (date) {
                           setDateObject(date);
-                          const formatted = date.toISOString().split("T")[0];
-                          setSelectedDay(formatted);
+                          setSelectedDay(toLocalDateStr(date));
                         }
                       }}
                     />
@@ -296,7 +279,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                   }}
                 >
                   <Text style={{ color: esFestivoJornada ? '#f59e0b' : '#8d99ae', textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>
-                    {esFestivoJornada ? '✓ JORNADA EN DOMINGO / FESTIVO (RECARGO +80%)' : '+ ¿LA JORNADA FUE UN DOMINGO O FESTIVO?'}
+                    {esFestivoJornada ? `✓ JORNADA EN DOMINGO / FESTIVO (RECARGO +${getRecargoDominical(selectedDay || toLocalDateStr())}%)` : '+ ¿LA JORNADA FUE UN DOMINGO O FESTIVO?'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -317,17 +300,15 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
           </ScrollView>
 
           {/* Botones de Acción */}
-          {/* --- ASÍ DEBEN QUEDAR TUS BOTONES DE ACCIÓN (PÁGINA 14) --- */}
           <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
 
             {/* Botón 1: Cancelar */}
-            <TouchableOpacity onPress={onClose} style={[styles.actionBtn, styles.btnCancel]}>
+            <TouchableOpacity onPress={handleClose} style={[styles.actionBtn, styles.btnCancel]}>
               <Text style={styles.btnTextCancel}>Cancelar</Text>
             </TouchableOpacity>
 
             {/* Botón 2: Guardar */}
             <TouchableOpacity onPress={handleSaveManual} disabled={loading} style={[styles.actionBtn, styles.btnSave]}>
-              {/* Aquí va la corrección del Error 2 */}
               {loading ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (

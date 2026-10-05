@@ -5,6 +5,9 @@ import {
   Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { useWorkHours } from '../context/WorkHoursContext';
+import { confirmar, mostrarAlerta } from '../lib/alert';
+import { getRecargoDominical } from '../lib/utils';
+import { Marca } from '../types/hours';
 import { TabBarIcon } from './TabBarIcon';
 
 interface HoursInputModalProps {
@@ -14,77 +17,67 @@ interface HoursInputModalProps {
 }
 
 export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClose, dateStr }) => {
-  const { entries, saveDayEntry, deleteDayEntry } = useWorkHours() as any;
+  const { entries, updateDayDetails, deleteDayEntry } = useWorkHours();
   const [isHoliday, setIsHoliday] = useState(false);
   const [notes, setNotes] = useState('');
-  const [gpsLoading, setGpsLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // LEER MARCAS: Extrae la información y la lista de marcas de este día seleccionado
   const dayData = dateStr ? (entries[dateStr] || null) : null;
-  const marcasDelDia = (dayData as any)?.marcas || [];
+  const marcasDelDia: Marca[] = dayData?.marcas ?? [];
 
-  // 💡 DETECTOR MAESTRO DE TU SOLUCIÓN: Averigua el origen del registro para bloquear o liberar
-  const tipoIngresoDia = (dayData as any)?.tipoIngreso || '';
-  const tieneMarcasManuales = marcasDelDia.some((m: any) => m.tipo === 'MANUAL' || m.tipo === 'MANUAL_JORNADA');
+  // Los días con registro manual quedan fijados: festivo y notas se definieron al crearlos
+  const tipoIngresoDia = dayData?.tipoIngreso || '';
+  const tieneMarcasManuales = marcasDelDia.some((m) => m.tipo === 'MANUAL' || m.tipo === 'MANUAL_JORNADA');
   
   // Candado de seguridad: Se activa si Firestore dice que es MANUAL o si contiene marcas manuales
   const esRegistroManual = tipoIngresoDia === 'MANUAL' || tipoIngresoDia === 'MANUAL_JORNADA' || tieneMarcasManuales;
 
+  // Carga el formulario solo al abrir: así una actualización en vivo no borra lo que se está escribiendo
   useEffect(() => {
     if (isOpen && dateStr) {
       const existingEntry = entries[dateStr];
       if (existingEntry) {
-        // Si el día ya tiene datos, cargamos su estado real de Firebase
         setIsHoliday(!!existingEntry.isHolidayOrSunday);
         setNotes(existingEntry.notes || '');
       } else {
-        // Si el día está completamente vacío, por defecto el switch arranca apagado
-        // y calculamos automáticamente si ese dateStr cae un día Domingo (0)
-        const isSunday = new Date(dateStr + 'T00:00:00').getDay() === 0;
-        setIsHoliday(isSunday);
+        // Día vacío: el switch arranca encendido solo si la fecha cae en domingo
+        setIsHoliday(new Date(dateStr + 'T00:00:00').getDay() === 0);
         setNotes('');
       }
     }
-  }, [isOpen, dateStr, entries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, dateStr]);
 
   if (!dateStr) return null;
 
   const handleSave = async () => {
-    if (!dateStr) return;
-    setGpsLoading(true);
+    setSaving(true);
     try {
-      // 1. Jalamos con total seguridad el registro actual directamente de tu estado 'entries'
-      const existingEntry = (entries as any)[dateStr] || {};
-      
-      // 2. Extraemos las horas y las marcas que ya calculó el botón gigante para no perderlas
-      const horasReales = existingEntry.hours !== undefined ? existingEntry.hours : 0;
-      const marcasReales = existingEntry.marcas || [];
-      
-      // 3. CONSERVACIÓN ABSOLUTA: Armamos el paquete asegurando que las horas y las marcas se mantengan intactas
-      const updatedPayload = {
-        ...existingEntry, // Hereda los campos base (userId, yearMonth, etc.)
-        date: dateStr,
-        hours: horasReales, // ¡OBLIGATORIO! Mantiene el acumulado real de las fracciones
-        marcas: marcasReales, // ¡OBLIGATORIO! Protege la lista de ponchadas para que no se borren
-        isHolidayOrSunday: isHoliday,
-        notes: notes.trim() ? notes : null,
-      };
-
-      // 4. Mandamos el paquete purificado a tu función nativa de Firebase
-      await saveDayEntry(updatedPayload as any);
-      alert('¡Hoja de ruta actualizada con éxito, mi rey! ☀️');
+      await updateDayDetails(dateStr, { isHolidayOrSunday: isHoliday, notes: notes.trim() || null });
+      mostrarAlerta('Jornada actualizada');
       onClose();
     } catch (error) {
-      console.error("Error al guardar cambios de auditoría:", error);
-      alert('No se pudieron salvar los cambios. Revisa tu red.');
+      console.error('Error al guardar la jornada:', error);
+      mostrarAlerta('No se pudieron guardar los cambios', 'Revisa tu conexión e inténtalo de nuevo.');
     } finally {
-      setGpsLoading(false);
+      setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    await deleteDayEntry(dateStr);
-    onClose();
+    const ok = await confirmar('Eliminar jornada', 'Se borrarán todas las marcas y horas de este día. Esta acción no se puede deshacer.', 'Eliminar');
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      await deleteDayEntry(dateStr);
+      onClose();
+    } catch (error) {
+      console.error('Error eliminando la jornada:', error);
+      mostrarAlerta('No se pudo eliminar el registro del día.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const formatFriendlyDate = (str: string) => {
@@ -131,7 +124,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               </View>
             ) : (
               <View style={{ backgroundColor: '#1c254140', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#3a4f7c15', marginBottom: 20, gap: 10 }}>
-                {marcasDelDia.map((punch: any, idx: number) => {
+                {marcasDelDia.map((punch, idx) => {
                   const esEntrada = punch.tipo === 'ENTRADA';
                   const esManual = punch.tipo === 'MANUAL' || punch.tipo === 'MANUAL_JORNADA';
                   const horaConSegundos = punch.hora ? punch.hora.toLowerCase() : '';
@@ -170,7 +163,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: '500', marginBottom: 2 }}>¿Es Domingo o Festivo?</Text>
                 <Text style={{ fontSize: 11, color: '#8d99ae' }}>
-                  {esRegistroManual ? 'Bloqueado: Administrado desde registro manual.' : 'Aplica recargo exclusivo del +75% a la tarjeta correspondiente.'}
+                  {esRegistroManual ? 'Bloqueado: Administrado desde registro manual.' : `Aplica el recargo dominical/festivo (+${getRecargoDominical(dateStr)}% vigente para esta fecha).`}
                 </Text>
               </View>
               <Switch 
@@ -184,8 +177,9 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
 
             {/* CUADRO DE TEXTO DE NOTAS CONDICIONADO */}
             <View style={{ marginBottom: 24 }}>
-              <Text style={{ fontSize: 13, color: '#8d99ae', marginBottom: 8, fontWeight: '500' }}>Notes / Actividades</Text>
-              <TextInput                 editable={!esRegistroManual} // Candado 2: Se vuelve de solo lectura si es manual
+              <Text style={{ fontSize: 13, color: '#8d99ae', marginBottom: 8, fontWeight: '500' }}>Notas / Actividades</Text>
+              <TextInput
+                editable={!esRegistroManual} // Candado 2: Se vuelve de solo lectura si es manual
                 value={notes} 
                 onChangeText={setNotes} 
                 placeholder={esRegistroManual ? "Notas fijadas en registro manual." : "Escribe aquí las novedades del día..."} 
@@ -196,9 +190,9 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               />
             </View>
 
-            {gpsLoading && (
+            {saving && (
               <Text style={{ color: '#00b4d8', fontSize: 12, textAlign: 'center', marginBottom: 12, fontWeight: '500' }}>
-                Sincronizando satélites y guardando en Firebase...
+                Guardando cambios...
               </Text>
             )}
 
@@ -207,7 +201,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               {hasExistingData && (
                 <TouchableOpacity
                   onPress={handleDelete}
-                  disabled={gpsLoading}
+                  disabled={saving}
                   style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: '#1c2541', borderWidth: 1, borderColor: '#ff007f30', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Text style={{ color: '#ff6b92', fontSize: 15, fontWeight: '600' }}>Eliminar</Text>
@@ -216,10 +210,10 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               
               <TouchableOpacity
                 onPress={handleSave}
-                disabled={gpsLoading || esRegistroManual} // Candado 3: Inhabilita por completo el clic si es manual
+                disabled={saving || esRegistroManual} // Candado 3: Inhabilita por completo el clic si es manual
                 style={{ 
                   flex: 1, 
-                  backgroundColor: esRegistroManual ? '#161e38' : gpsLoading ? '#1c2541' : '#3a86ff', 
+                  backgroundColor: esRegistroManual ? '#161e38' : saving ? '#1c2541' : '#3a86ff', 
                   paddingVertical: 14, 
                   borderRadius: 12, 
                   alignItems: 'center', 
@@ -228,7 +222,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                 }}
                 activeOpacity={0.85}
               >
-                {gpsLoading ? (
+                {saving ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
                   <Text style={{ color: esRegistroManual ? '#4f5d75' : '#ffffff', fontSize: 16, fontWeight: '600' }}>

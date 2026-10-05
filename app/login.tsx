@@ -2,27 +2,16 @@ import { useRouter } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, ScrollView, Text, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { TabBarIcon } from '../components/TabBarIcon';
-// @ts-ignore
-import { auth, db } from '../lib/firebase'; // Asegúrate de que apunte bien a tu config de Firebase
+import { mostrarAlerta } from '../lib/alert';
+import { auth, db } from '../lib/firebase';
 
 export default function SmartLogin() {
   const [cedula, setCedula] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState('');
   const router = useRouter();
-
-  const mostrarAlerta = (titulo: string, mensaje: string) => {
-    if (Platform.OS === 'web') {
-      // Si corre en Vercel o localhost, usa el cuadro nativo del navegador
-      window.alert(`${titulo}: ${mensaje}`);
-    } else {
-      // Si corre en Android o iOS, dispara el modal nativo del celular
-      Alert.alert(titulo, mensaje);
-    }
-  };
 
   const handleLogin = async () => {
     if (!cedula.trim() || !password.trim()) {
@@ -39,7 +28,6 @@ export default function SmartLogin() {
 
       if (!userSnap.exists()) {
         mostrarAlerta('Operario no encontrado', 'No existe ningún usuario registrado con el número de cédula ingresado.');
-        setLoading(false);
         return;
       }
 
@@ -48,23 +36,12 @@ export default function SmartLogin() {
 
       if (!emailAsociado) {
         mostrarAlerta('Error de cuenta', 'Este perfil no cuenta con un correo electrónico asociado para la autenticación.');
-        setLoading(false);
         return;
       }
 
-      // 2. Autenticar en Firebase Auth utilizando el correo recuperado y la contraseña escrita
-      // @ts-ignore
+      // 2. Autenticar en Firebase Auth utilizando el correo recuperado y la contraseña escrita.
+      //    La navegación a la app la hace el guardián de app/_layout.tsx al detectar la sesión.
       await signInWithEmailAndPassword(auth, emailAsociado, password);
-
-       // 🔀 Redirección controlada basada en roles
-    if (userData.role === 'admin') {
-      // Si es administrador, lo mandamos al dashboard principal (raíz de la carpeta (admin))
-      router.replace('/dashboard' as any);
-    } else {
-      // Si es operario, lo mandamos a su app de campo (raíz de la carpeta (operario))
-      router.replace('/(operario)' as any);
-    }
-
     } catch (error: any) {
       console.error(error);
       mostrarAlerta('Error de acceso', 'La cédula o la contraseña ingresadas son incorrectas. Verifica tus datos.');
@@ -74,9 +51,8 @@ export default function SmartLogin() {
   };
 
   // Estilos inline híbridos para asegurar consistencia perfecta en Web, Android e iOS
-  const containerStyle = { flex: 1, backgroundColor: '#090d16' };
+  const containerStyle: ViewStyle = { flex: 1, backgroundColor: '#090d16' };
   const cardStyle: ViewStyle = { backgroundColor: '#141e33', borderColor: '#1f293d', borderWidth: 1, borderRadius: 24, padding: 32, width: '100%', maxWidth: 500, alignSelf: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 };
-  const inputStyle = { backgroundColor: '#0c1322', color: '#ffffff', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: '#1a2436', };
   const buttonStyle: ViewStyle = { backgroundColor: '#3b82f6', paddingVertical: 16, borderRadius: 14, width: '100%', alignItems: 'center', marginTop: 8 };
 
   return (
@@ -120,7 +96,8 @@ export default function SmartLogin() {
           borderRadius: 12,
           paddingHorizontal: 16,
           width: '100%',
-          height: 52 // Forzamos una altura fija cómoda para el clic
+          height: 52, // Forzamos una altura fija cómoda para el clic
+          marginBottom: 16
         }}>
 
           {/* Icono posicionado a la izquierda */}
@@ -162,12 +139,13 @@ export default function SmartLogin() {
           borderRadius: 12,
           paddingHorizontal: 16,
           width: '100%',
-          height: 52 // Forzamos una altura fija cómoda para el clic
+          height: 52, // Forzamos una altura fija cómoda para el clic
+          marginBottom: 16
         }}>
 
           {/* Icono posicionado a la izquierda */}
           <View style={{ marginRight: 12 }}>
-            <TabBarIcon name="card-outline" size={20} color="#8d99ae" />
+            <TabBarIcon name="lock-closed-outline" size={20} color="#8d99ae" />
           </View>
 
           {/* El TextInput ahora es invisible (sin bordes ni fondos) y se expande en el espacio restante */}

@@ -1,111 +1,65 @@
 // components/RealTimePunch.tsx
 import * as Location from 'expo-location';
-import React, { useContext, useEffect, useState, } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { WorkHoursContext } from '../context/WorkHoursContext'; // Asegúrate de que la ruta apunte a tu Contexto real
+import { GeoCoords, useWorkHours } from '../context/WorkHoursContext';
+import { mostrarAlerta } from '../lib/alert';
+import { toLocalDateStr } from '../lib/utils';
 import { TabBarIcon } from './TabBarIcon';
 
+export const formatSeconds = (totalSecs: number) => {
+  const hrs = Math.floor(totalSecs / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+  return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
+
+const obtenerUbicacion = async (): Promise<GeoCoords | null> => {
+  if (Platform.OS === 'web') {
+    if (!navigator.geolocation) return null;
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 7000 }
+      );
+    });
+  }
+
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== 'granted') return null;
+  const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+  return { latitude: loc.coords.latitude, longitude: loc.coords.longitude, accuracy: loc.coords.accuracy };
+};
+
 export const RealTimePunch: React.FC = () => {
- 
-    // 🔌 CONEXIÓN BLINDADA: Envolvemos el useContext en ( ... as any) para forzar la lectura de punchInRealTime
-  const { entries, punchInRealTime, setGlobalSeconds } = (useContext(WorkHoursContext) as any);
-
-
-  const [currentStatus, setCurrentStatus] = useState<'FUERA' | 'LABORANDO'>('FUERA');
+  const { openShift, globalSeconds, punchInRealTime } = useWorkHours();
   const [loading, setLoading] = useState(false);
-  const [secondsActive, setSecondsActive] = useState(0);
 
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  const localDate = new Date(now.getTime() - (offset * 60 * 1000));
-  const todayStr = localDate.toISOString().split('T')[0];
-  const todayData = entries[todayStr] || null;
-  const todayPunches = todayData?.marcas || [];
+  // El estado se deriva del turno abierto guardado en la nube (puede venir de ayer)
+  const currentStatus = openShift ? 'LABORANDO' : 'FUERA';
+  const turnoDesdeAyer = !!openShift && openShift.date !== toLocalDateStr();
+  const timeString = formatSeconds(globalSeconds);
 
-  // 🛰️ ESCUCHA DE ESTADO DE NUBE: Sincroniza el botón y el cronómetro con Firebase al abrir la app
-  useEffect(() => {
-    if (todayPunches.length > 0) {
-      const ultimaMarca = todayPunches[todayPunches.length - 1];
-      if (ultimaMarca.tipo === 'ENTRADA') {
-        setCurrentStatus('LABORANDO');
-        
-        // 🛡️ EL SEGUNDERO AUTOMÁTICO: Crea un bucle continuo de 1 segundo en caliente
-        const interval = setInterval(() => {
-          const tiempoPasado = Math.floor((Date.now() - new Date(ultimaMarca.timestamp).getTime()) / 1000);
-          setSecondsActive(tiempoPasado > 0 ? tiempoPasado : 0);
-            // ✨ REGLÓN NUEVO (Pégalo exactamente aquí):
-          if (typeof setGlobalSeconds === 'function') {
-          setGlobalSeconds(tiempoPasado > 0 ? tiempoPasado : 0);
-    }
-        }, 1000);
-
-        // Limpiamos el temporizador si el componente se desmonta
-        return () => clearInterval(interval);
-      } else {
-        setCurrentStatus('FUERA');
-        setSecondsActive(0);
-      }
-    } else {
-      setCurrentStatus('FUERA');
-      setSecondsActive(0);
-    }
-   }, [todayPunches]);
-
-
-
-  // ⏱️ TRADUCTOR GLOBAL DE TIEMPO: Convierte los segundos unificados del Contexto a HH:MM:SS
-  const timeString = (() => {
-        // Modifica la línea 46 para que quede exactamente así:
-    const totalSecs = secondsActive || 0;
-    const hrs = Math.floor(totalSecs / 3600);
-    const mins = Math.floor((totalSecs % 3600) / 60);
-    const secs = totalSecs % 60;
-    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  })();
-
-
-  // 🔘 ACCIÓN DE PONCHAR CON GPS REAL
   const handlePunchAction = async () => {
     setLoading(true);
-    
+
     try {
-      // 1. Forzar petición de coordenadas para auditoría empresarial
-      let coords: any = null;
-      if (Platform.OS === 'web') {
-        if (navigator.geolocation) {
-          coords = await new Promise((resolve) => {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-              () => resolve(null),
-              { enableHighAccuracy: true, timeout: 7000 }
-            );
-          });
-        }
-      } else {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude, accuracy: loc.coords.accuracy };
-        }
-      }
+      // Si el GPS falla la marca se registra igual, sin coordenadas
+      const coords = await obtenerUbicacion().catch((e) => {
+        console.warn('No se pudo obtener la ubicación:', e);
+        return null;
+      });
 
-      // 2. Determinar la acción matemática
-      const proximaMarca = currentStatus === 'FUERA' ? 'ENTRADA' : 'SALIDA';
-
-      // 3. Ejecutar el guardado directo en la nube de Firebase
-      const resultado = await punchInRealTime(proximaMarca, coords);
-      
-      if (resultado) {
-        alert(`¡Marca de ${proximaMarca} registrada con éxito corporativo!`);
-      }
+      const marca = await punchInRealTime(coords);
+      mostrarAlerta(`Marca de ${marca} registrada`, coords ? undefined : 'Se guardó sin ubicación GPS.');
     } catch (e) {
-      console.error(e);
-      alert('Error en la geolocalización. Intenta de nuevo.');
+      console.error('Error en el ponchador de tiempo real:', e);
+      mostrarAlerta('No se pudo registrar la marca', 'Revisa tu conexión e inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
   };
-
 
   return (
     <View style={styles.container}>
@@ -123,7 +77,9 @@ export const RealTimePunch: React.FC = () => {
 
       {/* ⏱️ CRONÓMETRO DIGITAL */}
       <View style={styles.timerContainer}>
-        <Text style={styles.timerLabel}>TIEMPO TRANSCURRIDO HOY</Text>
+        <Text style={styles.timerLabel}>
+          {turnoDesdeAyer ? 'TURNO NOCTURNO (INICIADO AYER)' : 'TIEMPO DEL TURNO ACTUAL'}
+        </Text>
         <Text style={[styles.timerNumbers, currentStatus === 'LABORANDO' ? styles.timerNumbersActive : null]}>
           {timeString}
 
@@ -270,73 +226,5 @@ const styles = StyleSheet.create({
     color: '#8d99ae',
     marginTop: 12,
     textAlign: 'center',
-  },
-  historySection: {
-    flex: 1,
-    backgroundColor: '#1c254130',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#3a4f7c10',
-  },
-  historyTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#8d99ae',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  punchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#1c254160',
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#3a4f7c15',
-  },
-  punchInfoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  typeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  badgeIn: {
-    backgroundColor: 'rgba(0, 245, 212, 0.08)',
-    borderColor: 'rgba(0, 245, 212, 0.2)',
-  },
-  badgeOut: {
-    backgroundColor: 'rgba(255, 0, 127, 0.08)',
-    borderColor: 'rgba(255, 0, 127, 0.2)',
-  },
-  badgeTextIn: {
-    color: '#00f5d4',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  badgeTextOut: {
-    color: '#ff007f',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  punchTimeText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  punchInfoRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  punchLocationText: {
-    color: '#8d99ae',
-    fontSize: 12,
   },
 });

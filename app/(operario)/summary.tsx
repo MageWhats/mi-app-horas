@@ -1,5 +1,5 @@
-// app/(tabs)/summary.tsx
-import { Stack } from 'expo-router'; // ¡NUEVO!: Control de cabeceras nativas
+// app/(operario)/summary.tsx
+import { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MonthNavigator } from '../../components/MonthNavigator';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -7,9 +7,23 @@ import { SummaryCard } from '../../components/SummaryCard';
 import { TabBarIcon } from '../../components/TabBarIcon';
 import { WeeklyBarChart } from '../../components/WeeklyBarChart';
 import { useWorkHours } from '../../context/WorkHoursContext';
+import { mostrarAlerta } from '../../lib/alert';
 
 export default function SummaryScreen() {
-  const { summary, currentDate, loading, entries, exportCurrentMonthToCSV } = useWorkHours();
+  const { summary, currentDate, loading, entries, exportCurrentMonth } = useWorkHours();
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportCurrentMonth();
+    } catch (error) {
+      console.error('Error generando el reporte de Excel:', error);
+      mostrarAlerta('No se pudo generar el reporte de Excel.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -31,21 +45,15 @@ export default function SummaryScreen() {
 
   const hasEntries = Object.keys(entries).length > 0;
 
-   // BUSCADOR DE EXCESOS SEMANALES
-  const weeklyOvertimeAlerts = Object.entries(summary.weeklyTotals || {}).filter(
-    ([,hours]) => (hours as number) > 44
-  );
+  // Semanas de calendario que superan el límite legal vigente para esa semana (Ley 2101)
+  const weeklyOvertimeAlerts = summary.weeklyTotals
+    .map((hours, index) => ({ hours, index, limit: summary.weeklyLimits[index], range: summary.weekRanges[index] }))
+    .filter(({ hours, limit }) => hours > limit);
 
   return (
     <ScreenContainer>
-      {/* 1. CONFIGURACIÓN COMPACTA: Oculta la cabecera blanca por defecto en cualquier celular o web */}
-      <Stack.Screen options={{ headerShown: false }} />
-
-      {/* 2. TÍTULO INTEGRADO DIRECTAMENTE EN EL AZUL DE TU MAR PROFUNDO */}
       <View style={styles.headerRow}>
         <Text style={styles.headerTitle}>Resumen</Text>
-        
-
       </View>
 
       <MonthNavigator />
@@ -58,7 +66,8 @@ export default function SummaryScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
           
           <TouchableOpacity
-            onPress={exportCurrentMonthToCSV}
+            onPress={handleExport}
+            disabled={exporting || !hasEntries}
             activeOpacity={0.8}
             style={{
               flexDirection: 'row',
@@ -71,13 +80,20 @@ export default function SummaryScreen() {
               gap: 8,
               borderWidth: 1,
               borderColor: '#15803d',
-              marginTop: 4 // Pequeño ajuste para despegarlo del navegador
+              marginTop: 4, // Pequeño ajuste para despegarlo del navegador
+              opacity: exporting || !hasEntries ? 0.5 : 1,
             }}
           >
-            <TabBarIcon name="calendar" size={20} color="#ffffff" />
-            <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '600' }}>
-              Exportar Reporte a Excel
-            </Text>
+            {exporting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <>
+                <TabBarIcon name="calendar" size={20} color="#ffffff" />
+                <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '600' }}>
+                  Exportar Reporte a Excel
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <View style={{ backgroundColor: '#1c2541', padding: 16, borderRadius: 14, borderWidth: 1, borderColor: '#3a4f7c20', marginBottom: 12 }}>
@@ -100,29 +116,29 @@ export default function SummaryScreen() {
                 No hay registros para este mes
               </Text>
               <Text style={{ fontSize: 13, color: '#3a4f7c', textAlign: 'center' }}>
-                Ve a la pestaña Registro para comenzar a añadir tus horas.
+                Ve a la pestaña Inicio para comenzar a añadir tus horas.
               </Text>
             </View>
           ) : (
             <>
-              <SummaryCard summary={summary} />
+              <SummaryCard summary={summary} currentDate={currentDate} />
             
               {/* ⚠️ TARJETA DE ALERTA DE JORNADA MÁXIMA DETECTADA */}
-              {weeklyOvertimeAlerts.map(([weekName, hours]) => {
-                const extraHours = ((hours as number) - 44).toFixed(1);
+              {weeklyOvertimeAlerts.map(({ hours, index, limit, range }) => {
+                const extraHours = (hours - limit).toFixed(1);
                 return (
-                  <View key={weekName} style={{ backgroundColor: 'rgba(249, 115, 22, 0.15)', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#f9731650', marginBottom: 12, marginTop: 4 }}>
+                  <View key={index} style={{ backgroundColor: 'rgba(249, 115, 22, 0.15)', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#f9731650', marginBottom: 12, marginTop: 4 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 6 }}>
                       <TabBarIcon name="alert-circle" size={16} color="#f97316" />
                       <Text style={{ fontSize: 12, fontWeight: '800', color: '#f97316', letterSpacing: 0.5 }}>ALERTA: JORNADA MÁXIMA EXCEDIDA</Text>
                     </View>
                     <Text style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 16 }}>
-                      • En la <Text style={{ fontWeight: '700', color: '#ffffff' }}>Semana {Number(weekName) + 1}</Text> trabajaste <Text style={{ fontWeight: '700', color: '#ffffff' }}>{hours}h</Text>. Superaste el límite legal de 44h por ley en Colombia (<Text style={{ fontWeight: '700', color: '#f97316' }}>+{extraHours}h extra</Text>).
+                      • En la <Text style={{ fontWeight: '700', color: '#ffffff' }}>Semana {index + 1}</Text> (días {range.from} al {range.to}) trabajaste <Text style={{ fontWeight: '700', color: '#ffffff' }}>{hours}h</Text>. Superaste el límite legal de {limit}h por ley en Colombia (<Text style={{ fontWeight: '700', color: '#f97316' }}>+{extraHours}h extra</Text>).
                     </Text>
                   </View>
                 );
               })}
-              <WeeklyBarChart weeklyHours={summary.weeklyTotals} />
+              <WeeklyBarChart weeklyHours={summary.weeklyTotals} weekRanges={summary.weekRanges} />
             </>
           )}
 
@@ -148,11 +164,4 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     letterSpacing: -0.5,
   },
-  settingsButton: {
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: '#1c2541',
-    borderWidth: 1,
-    borderColor: '#3a4f7c30',
-  }
 });

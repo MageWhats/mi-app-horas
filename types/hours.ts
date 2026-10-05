@@ -1,31 +1,51 @@
 // types/hours.ts
 
+export type TipoMarca = 'ENTRADA' | 'SALIDA' | 'MANUAL' | 'MANUAL_JORNADA';
+
+export interface Marca {
+  id: string;
+  tipo: TipoMarca;
+  hora: string;               // Texto legible para la interfaz
+  timestamp?: string;         // ISO; presente en las marcas en tiempo real
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracy?: number | null;
+  horaIngreso?: string;       // Solo marcas MANUAL
+  horaSalida?: string;        // Solo marcas MANUAL
+  totalHours?: number;        // Solo marcas MANUAL_JORNADA
+  zona?: string;
+}
+
 export interface DayEntry {
   date: string;               // Formato "YYYY-MM-DD"
-  startTime: string;          // Hora de entrada "HH:MM"
-  endTime: string;            // Hora de salida "HH:MM"
-  hours: number;              // Total de horas reales calculadas en el día
-  nightHours: number;         // Campo numérico dedicado para horas de la noche
-  isHolidayOrSunday: boolean; // Identifica si aplica el recargo dominical/festivo
-  notes?: string;   
-  
-  location?:{
-    latitude: number;
-    longitude: number;
-    timestamp: number;// Anotaciones opcionales
-    accuracy: number; 
-  };
+  startTime?: string;         // Hora de entrada (solo registro manual por horario)
+  endTime?: string;           // Hora de salida (solo registro manual por horario)
+  hours: number;              // Total de horas reales del día
+  totalHours?: number;        // Campo tal como se guarda en Firestore
+  nightHours: number;         // Horas dentro de la franja nocturna (21:00 - 06:00)
+  isHolidayOrSunday: boolean; // Aplica recargo dominical/festivo
+  notes?: string | null;
+  tipoIngreso?: string;
+  marcas?: Marca[];
+}
+
+/** Rango de días del mes (inclusive) que forma una semana de calendario. */
+export interface WeekRange {
+  from: number;
+  to: number;
 }
 
 export interface MonthlySummary {
   totalHours: number;            // Suma de todas las horas netas trabajadas
-  totalHoursWithRecargo: number; // EXCLUSIVO: Suma de horas equivalentes SOLO de domingos/festivos
+  totalHoursWithRecargo: number; // Horas trabajadas en domingos/festivos
   workedDays: number;            // Días con horas > 0
   averageHoursPerDay: number;    // Promedio por día trabajado
   maxDay: DayEntry | null;       // Jornada más larga
   minDay: DayEntry | null;       // Jornada más corta
-  weeklyTotals: number[];        // Totales para el gráfico de barras SVG
-  weeklyLimit: number;           // Límite legal semanal estándar (44 o 42)
-  totalRecargoNocturno: number;  // EXCLUSIVO: Horas con recargo del +35% nocturno
-  totalHorasExtras: number;      // EXCLUSIVO: Suma acumulada de excesos diarios > 7.5h
+  weeklyTotals: number[];        // Totales por semana de calendario (lunes a domingo)
+  weekRanges: WeekRange[];       // Días que abarca cada semana dentro del mes
+  weeklyLimits: number[];        // Límite legal de cada semana
+  weeklyLimit: number;           // Límite legal semanal vigente al cierre del mes
+  totalRecargoNocturno: number;  // Horas en la franja nocturna
+  totalHorasExtras: number;      // Suma de excesos diarios > 7.5h
 }

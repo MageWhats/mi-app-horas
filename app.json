@@ -40,6 +40,12 @@
         }
       ],
       "expo-sharing",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Control de Horas usa tu ubicación para registrar dónde marcas tu entrada y salida."
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-font"
     ],
