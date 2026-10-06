@@ -180,8 +180,11 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                         )}
                         {!!m.motivoSinGps && <Text style={{ color: c.warning, fontSize: 11, fontWeight: '800' }}>SIN GPS</Text>}
                         {m.ubicacionSimulada && <Text style={{ color: c.warning, fontSize: 11, fontWeight: '800' }}>GPS SIMULADO</Text>}
+                        {m.pendiente
+                          ? <Text style={{ color: c.info, fontSize: 11, fontWeight: '800' }}>POR ENVIAR</Text>
+                          : m.sinConexion && <Text style={{ color: c.info, fontSize: 11, fontWeight: '800' }}>SIN CONEXIÓN</Text>}
 
-                        {manual && !m.anulada && !abierta && (
+                        {manual && !m.anulada && !abierta && !m.pendiente && (
                           <TouchableOpacity
                             onPress={() => { setAnulando(m.id); setMotivo(''); setErrorAnulacion(''); }}
                             disabled={saving}

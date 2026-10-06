@@ -185,6 +185,10 @@ export default function Login() {
             />
           </FormField>
 
+          <TouchableOpacity onPress={() => router.push('/recuperar')} style={styles.olvido} accessibilityRole="link">
+            <Text style={styles.olvidoTexto}>¿Olvidaste tu contraseña?</Text>
+          </TouchableOpacity>
+
           <Pressable
             onPress={() => setRecordar((r) => !r)}
             accessibilityRole="checkbox"
@@ -238,6 +242,8 @@ const crearEstilos = (c: ReturnType<typeof useTheme>['colors']) => StyleSheet.cr
   },
   titulo: { color: c.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
   subtitulo: { color: c.textMuted, fontSize: 14, lineHeight: 20, marginTop: 4, marginBottom: 22 },
+  olvido: { alignSelf: 'flex-end', marginTop: -6, marginBottom: 10, paddingVertical: 4 },
+  olvidoTexto: { color: c.primary, fontSize: 13, fontWeight: '600' },
   recordar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2, marginBottom: 16, alignSelf: 'flex-start' },
   casilla: { width: 22, height: 22, borderRadius: 7, borderWidth: 1.5, borderColor: c.borderStrong, alignItems: 'center', justifyContent: 'center' },
   casillaActiva: { backgroundColor: c.primary, borderColor: c.primary },

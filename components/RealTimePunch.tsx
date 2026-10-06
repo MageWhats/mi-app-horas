@@ -56,14 +56,14 @@ export const RealTimePunch: React.FC = () => {
   const registrar = async (coords: GeoCoords | null, motivoSinGps?: string) => {
     setGuardando(true);
     try {
-      const marca = await punchInRealTime(coords, motivoSinGps);
+      const { tipo, sinConexion } = await punchInRealTime(coords, motivoSinGps);
       setFalloGps(null);
-      const detalle = !coords
-        ? 'Se guardó sin GPS con el motivo indicado.'
-        : coords.simulada
-          ? 'Tu celular reportó una ubicación simulada: la marca quedó señalada para revisión.'
-          : undefined;
-      mostrarAlerta(`Marca de ${marca} registrada`, detalle);
+      const detalles = [
+        sinConexion && 'No hay señal: quedó guardada en el celular y se enviará sola al volver la conexión.',
+        !coords && 'Se guardó sin GPS con el motivo indicado.',
+        coords?.simulada && 'Tu celular reportó una ubicación simulada: la marca quedó señalada para revisión.',
+      ].filter(Boolean).join(' ');
+      mostrarAlerta(sinConexion ? `${tipo} guardada sin conexión` : `Marca de ${tipo} registrada`, detalles || undefined);
     } catch (e) {
       console.error('Error en el ponchador de tiempo real:', e);
       mostrarAlerta('No se pudo registrar la marca', mensajeDeError(e, 'Revisa tu conexión e inténtalo de nuevo.'));

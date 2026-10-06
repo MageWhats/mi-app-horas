@@ -23,6 +23,7 @@
 | `auditoria` | Quién creó o cambió qué y cuándo (marcas, jornadas, perfiles, cédulas autorizadas). Solo la escriben triggers. |
 | `cedulas_autorizadas` | Lista opcional de cédulas que pueden registrarse (ver *Registro restringido*). |
 | `intentos_acceso` | Intentos de login y registro, para limitar abusos. Se limpia sola. |
+| `supervisores` | Usuarios que ven las horas de todo el equipo (ver *Supervisores*). |
 
 Las horas totales, nocturnas y extras **no se guardan**: la app las calcula a partir de las marcas vigentes
 con las reglas legales de cada fecha (`lib/utils.ts`). Domingos y festivos salen del calendario oficial de
@@ -35,6 +36,8 @@ Colombia (Ley Emiliani), no los marca el operario.
 | `ponchar(...)` | Registra ENTRADA o SALIDA con la **hora del servidor** (Colombia). Corta en la medianoche los turnos que empezaron el día anterior, evita marcas dobles (1 minuto) y exige motivo si no hay GPS. |
 | `registrar_manual(...)` | Horas manuales: solo de los últimos 7 días, nunca futuras, sin cruzarse con otras marcas y sin superar 24 h en el día. |
 | `anular_marca(id, motivo)` | Anula un registro manual: queda guardado y tachado, y deja de sumar. Las marcas de entrada y salida no se anulan. |
+| `ponchar_sin_conexion(...)` | Registra una marca que el celular guardó sin señal (ver *Marcas sin conexión*). |
+| `es_supervisor()` / `operarios_equipo()` | Rol de supervisor y lista del equipo con solo nombre y cédula. |
 | `buscar_acceso(cedula, captcha)` | Correo de acceso de una cédula, con CAPTCHA y límite de intentos (30 por IP y 10 por cédula cada 10 min). |
 | `estado_registro(cedula, captcha)` | Si una cédula puede registrarse (disponible, registrada o no autorizada), con CAPTCHA y límite de intentos. |
 
@@ -88,6 +91,47 @@ Para desactivarlo: apaga *CAPTCHA protection* en el paso 5 y borra el secreto:
 
 La app de Android/iOS muestra la verificación en un WebView que abre `EXPO_PUBLIC_SITE_URL/turnstile.html`, así que
 necesita un **build nuevo** con esas variables.
+
+## Recuperar la contraseña (código por correo)
+
+La pantalla *¿Olvidaste tu contraseña?* envía un **código de 6 dígitos** al correo (no un enlace: así funciona igual en
+el celular y en la web). Necesita, una sola vez:
+
+1. **SMTP propio**: el correo incluido en Supabase solo envía a los miembros del equipo del proyecto. En
+   *Authentication → Emails → SMTP Settings* configura uno (por ejemplo Gmail con contraseña de aplicación, o Resend).
+2. **Plantilla con el código**: *Authentication → Emails → Templates → Reset Password*. Reemplaza el contenido por:
+   ```html
+   <h2>Recupera tu contraseña</h2>
+   <p>Tu código para crear una nueva contraseña en Control de Horas es:</p>
+   <p style="font-size:28px;font-weight:bold;letter-spacing:6px">{{ .Token }}</p>
+   <p>Si no lo pediste, ignora este correo.</p>
+   ```
+3. **Longitud del código**: *Authentication → Providers → Email → Email OTP Length* en **6**.
+
+## Supervisores
+
+Un supervisor ve, en la pestaña **Equipo**, el estado de cada operario, sus horas del mes, las marcas por revisar
+(sin GPS, GPS simulado, sin conexión, anuladas) y puede exportar el Excel del equipo. **Solo datos laborales**:
+nombre, cédula, marcas y horas; no ve dirección, contacto ni familia. No puede modificar nada.
+
+```sql
+-- Nombrar supervisor (por su cédula)
+insert into public.supervisores (user_id) select id from public.profiles where cedula = '1007744230';
+-- Ver los supervisores
+select p.cedula, p.full_name from public.supervisores s join public.profiles p on p.id = s.user_id;
+-- Quitar el rol
+delete from public.supervisores where user_id = (select id from public.profiles where cedula = '1007744230');
+```
+
+El cambio aplica la próxima vez que el supervisor abra la app.
+
+## Marcas sin conexión
+
+Si no hay señal al ponchar, la marca (con su GPS) se guarda en el celular y se envía sola al volver la conexión.
+Como la hora la pone el celular, la base de datos solo la acepta si es coherente: no está en el futuro, no tiene más de
+72 horas y es posterior a la última marca del operario. Queda **señalada "sin conexión"** en la app, en la auditoría y
+en el Excel (`created_at` guarda la hora en que llegó al servidor). Si el servidor la rechaza, el operario ve el
+motivo en Inicio y debe hacer un registro manual.
 
 ## Registro restringido
 

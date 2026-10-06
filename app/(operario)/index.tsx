@@ -13,6 +13,7 @@ import { ManualRegistrationModal } from "../../components/ManualRegistrationModa
 import { MonthNavigator } from "../../components/MonthNavigator";
 import { formatSeconds, RealTimePunch } from "../../components/RealTimePunch";
 import { ScreenContainer } from "../../components/ScreenContainer";
+import { AvisosInicio } from "../../components/AvisosInicio";
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { useWorkHours } from "../../context/WorkHoursContext";
 import { alpha, Paleta, useTheme, useThemedStyles } from "../../lib/theme";
@@ -211,6 +212,11 @@ export default function HomeScreen() {
                       {punch.ubicacionSimulada && (
                         <Text style={{ color: c.warning, fontWeight: "800" }}> · GPS simulado</Text>
                       )}
+                      {punch.pendiente ? (
+                        <Text style={{ color: c.info, fontWeight: "800" }}> · por enviar</Text>
+                      ) : punch.sinConexion ? (
+                        <Text style={{ color: c.info, fontWeight: "800" }}> · sin conexión</Text>
+                      ) : null}
                     </Text>
                   </View>
                 );
@@ -312,6 +318,7 @@ export default function HomeScreen() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ScreenContainer>
         <ScreenHeader />
+        <AvisosInicio />
         {/* 🧥 CONTENEDOR ANIMADO SUPERIOR: Se encoge de 450px a 60px al deslizar el dedo */}
         <Animated.View
           style={{

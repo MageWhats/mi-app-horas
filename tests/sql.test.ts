@@ -213,3 +213,85 @@ describe('acceso: CAPTCHA, límites y registro restringido', () => {
     await db.query('delete from public.cedulas_autorizadas');
   });
 });
+
+describe('marcas sin conexión', () => {
+  let carla: string;
+  const id = () => crypto.randomUUID();
+  const offline = (idCliente: string, momento: string, tipo: string, extra = 'null, null, null, null') =>
+    db.query(`select public.ponchar_sin_conexion($1, $2::timestamptz, $3, ${extra}) t`, [idCliente, momento, tipo]);
+  const haceHoras = (h: number) => valor<string>(`select (now() - make_interval(secs => $1::float8 * 3600))::text`, [h]);
+
+  beforeAll(async () => {
+    await comoAdmin();
+    carla = await registrar('4004');
+  });
+
+  it('acepta una entrada y una salida con hora del celular, señaladas', async () => {
+    await como(carla);
+    const idEntrada = id();
+    await offline(idEntrada, await haceHoras(5), 'ENTRADA', `4.6, -74.1, 10, null`);
+    await offline(id(), await haceHoras(1), 'SALIDA', `null, null, null, 'Sin señal en la obra'`);
+    const marcas = (await db.query<{ tipo: string; sin_conexion: boolean }>(
+      `select tipo, sin_conexion from public.marcas where user_id = auth.uid() order by momento`)).rows;
+    expect(marcas).toEqual([{ tipo: 'ENTRADA', sin_conexion: true }, { tipo: 'SALIDA', sin_conexion: true }]);
+    // Reenviar la misma marca no la duplica
+    expect((await offline(idEntrada, await haceHoras(5), 'ENTRADA', `4.6, -74.1, 10, null`)).rows[0]).toEqual({ t: 'ENTRADA' });
+    expect(await valor<number>('select count(*)::int from public.marcas where user_id = auth.uid()')).toBe(2);
+  });
+
+  it('rechaza horas incoherentes y estados que no cuadran', async () => {
+    await como(carla);
+    const futuro = await valor<string>(`select (now() + interval '1 hour')::text`);
+    await expect(offline(id(), futuro, 'ENTRADA', `1, 1, 5, null`)).rejects.toThrow(/futuro/);
+    await expect(offline(id(), await haceHoras(80), 'ENTRADA', `1, 1, 5, null`)).rejects.toThrow(/72 horas/);
+    await expect(offline(id(), await haceHoras(3), 'ENTRADA', `1, 1, 5, null`)).rejects.toThrow(/anterior a tu última marca/);
+    await expect(offline(id(), await haceHoras(0.5), 'SALIDA', `1, 1, 5, null`)).rejects.toThrow(/no coincide con el estado/);
+    await expect(offline(id(), await haceHoras(0.5), 'ENTRADA')).rejects.toThrow(/motivo/);
+  });
+
+  it('la app no puede escribir sin_conexion ni id_cliente directamente', async () => {
+    await como(carla);
+    await expect(db.query(`update public.marcas set sin_conexion = false`)).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe('supervisores', () => {
+  let supervisora: string;
+
+  beforeAll(async () => {
+    await comoAdmin();
+    supervisora = await registrar('5005');
+    await db.query('insert into public.supervisores (user_id) values ($1)', [supervisora]);
+  });
+
+  it('un operario normal no es supervisor ni ve el equipo', async () => {
+    await como(ana);
+    expect(await valor('select public.es_supervisor()')).toBe(false);
+    await expect(db.query('select * from public.operarios_equipo()')).rejects.toThrow(/Solo los supervisores/);
+    await expect(db.query('select * from public.supervisores')).rejects.toThrow(/permission denied/);
+  });
+
+  it('el supervisor ve las marcas y jornadas de todos, sin poder modificarlas', async () => {
+    await como(supervisora);
+    expect(await valor('select public.es_supervisor()')).toBe(true);
+    expect(await valor<number>('select count(distinct user_id)::int from public.marcas')).toBeGreaterThanOrEqual(3);
+    expect(await valor<number>('select count(*)::int from public.jornadas')).toBeGreaterThan(0);
+    await expect(db.query('delete from public.marcas')).rejects.toThrow(/permission denied/);
+    const editadas = (await db.query(`update public.jornadas set notas = 'x' returning id`)).rows;
+    expect(editadas).toHaveLength(0);
+  });
+
+  it('solo recibe datos laborales de los operarios', async () => {
+    await como(supervisora);
+    const equipo = (await db.query<Record<string, unknown>>('select * from public.operarios_equipo()')).rows;
+    expect(equipo.length).toBeGreaterThanOrEqual(4);
+    expect(Object.keys(equipo[0]).sort()).toEqual(['cedula', 'full_name', 'id']);
+    // Sigue sin poder leer perfiles ajenos (dirección, familia, contacto)
+    expect(await valor<number>('select count(*)::int from public.profiles')).toBe(1);
+  });
+
+  it('agregar un supervisor queda en la auditoría', async () => {
+    await comoAdmin();
+    expect(await valor('select registro_id from public.auditoria where tabla = $1', ['supervisores'])).toBe(supervisora);
+  });
+});

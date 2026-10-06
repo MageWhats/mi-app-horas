@@ -62,8 +62,8 @@ export default function ProfileScreen() {
   }, []);
 
   const handleChangePassword = async () => {
-    if (newPassword.length < 6) {
-      mostrarAlerta('La nueva contraseña debe tener mínimo 6 caracteres.');
+    if (newPassword.length < 8) {
+      mostrarAlerta('La nueva contraseña debe tener mínimo 8 caracteres.');
       return;
     }
 
@@ -171,7 +171,7 @@ export default function ProfileScreen() {
         <Text style={styles.seccion}>SEGURIDAD</Text>
         <View style={styles.tarjeta}>
           <Text style={styles.filaEtiquetaFuerte}>Cambiar contraseña</Text>
-          <Text style={[styles.ayuda, { marginBottom: 12 }]}>Mínimo 6 caracteres.</Text>
+          <Text style={[styles.ayuda, { marginBottom: 12 }]}>Mínimo 8 caracteres.</Text>
           <PasswordField
             value={newPassword}
             onChangeText={setNewPassword}

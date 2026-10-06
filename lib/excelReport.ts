@@ -26,10 +26,72 @@ const observacionesAuditoria = (entry: DayEntry) =>
     .flatMap((m) => [
       m.motivoSinGps ? `${m.tipo} ${m.hora} sin GPS: ${m.motivoSinGps}` : null,
       m.ubicacionSimulada ? `${m.tipo} ${m.hora}: ubicación simulada` : null,
+      m.sinConexion ? `${m.tipo} ${m.hora}: registrada sin conexión (hora del celular)` : null,
       m.anulada ? `${m.tipo} ${m.hora} ANULADA: ${m.motivoAnulacion ?? ''}` : null,
     ])
     .filter(Boolean)
     .join(' | ');
+
+/** Cantidad de marcas que requieren revisión: sin GPS, GPS simulado, sin conexión o anuladas. */
+export const contarAlertas = (entries: Record<string, DayEntry>) =>
+  Object.values(entries).flatMap((d) => d.marcas ?? [])
+    .filter((m) => m.motivoSinGps || m.ubicacionSimulada || m.sinConexion || m.anulada).length;
+
+const estilizarEncabezado = (fila: ExcelJS.Row) => {
+  fila.height = 28;
+  fila.eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+};
+
+const estilizarFila = (fila: ExcelJS.Row, indice: number) => {
+  fila.height = 22;
+  const color = indice % 2 === 0 ? 'FFF0F4F8' : 'FFFFFFFF';
+  fila.eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+    cell.border = { bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } }, top: { style: 'thin', color: { argb: 'FFCBD5E1' } } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+};
+
+/** Valores de una fila diaria (compartidos por el reporte individual y el del equipo). */
+const datosDelDia = (entry: DayEntry) => {
+  const horas = Number(entry.hours || 0);
+  const { entrada, salida } = getEntradaSalida(entry);
+  return {
+    fecha: entry.date,
+    entrada,
+    salida,
+    reales: Number(horas.toFixed(2)),
+    nocturnas: Number(entry.nightHours || 0),
+    extras: Number((horas > 7.5 ? horas - 7.5 : 0).toFixed(1)),
+    festivo: entry.isHolidayOrSunday ? 'SÍ' : 'NO',
+    notas: entry.notes || 'Sin novedades',
+    auditoria: observacionesAuditoria(entry),
+  };
+};
+
+/** Descarga el libro (web) o abre el menú de compartir (Android/iOS). */
+const entregarLibro = async (workbook: ExcelJS.Workbook, filename: string) => {
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  if (Platform.OS === 'web') {
+    const url = window.URL.createObjectURL(new Blob([buffer], { type: MIME_XLSX }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    return;
+  }
+
+  const file = new File(Paths.cache, filename);
+  if (file.exists) file.delete();
+  file.write(new Uint8Array(buffer as ArrayBuffer));
+  await Sharing.shareAsync(file.uri, { mimeType: MIME_XLSX, dialogTitle: 'Reporte de horas' });
+};
 
 /** Horas ordinarias del mes según la Ley 2101 (210 h desde julio de 2026). */
 const getHorasBaseMes = (date: Date) => {
@@ -60,45 +122,12 @@ export const exportMonthToExcel = async (
     { header: 'OBSERVACIONES DE AUDITORÍA', key: 'auditoria', width: 50 },
   ];
 
-  const headerRow = worksheet.getRow(1);
-  headerRow.height = 28;
-  headerRow.eachCell((cell) => {
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.alignment = { vertical: 'middle', horizontal: 'center' };
-  });
+  estilizarEncabezado(worksheet.getRow(1));
 
   // --- 2. Filas diarias en orden cronológico con efecto cebra ---
-  const detailRows = Object.values(entries).sort((a, b) => a.date.localeCompare(b.date));
-
-  detailRows.forEach((entry, index) => {
-    const hoursNum = Number(entry.hours || 0);
-    const extraDiaria = hoursNum > 7.5 ? hoursNum - 7.5 : 0;
-    const { entrada, salida } = getEntradaSalida(entry);
-
-    const row = worksheet.addRow({
-      fecha: entry.date,
-      entrada,
-      salida,
-      reales: Number(hoursNum.toFixed(2)),
-      nocturnas: Number(entry.nightHours || 0),
-      extras: Number(extraDiaria.toFixed(1)),
-      festivo: entry.isHolidayOrSunday ? 'SÍ' : 'NO',
-      notas: entry.notes || 'Sin novedades',
-      auditoria: observacionesAuditoria(entry),
-    });
-
-    row.height = 22;
-    const colorFila = index % 2 === 0 ? 'FFF0F4F8' : 'FFFFFFFF';
-    row.eachCell((cell) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorFila } };
-      cell.border = {
-        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-      };
-      cell.alignment = { vertical: 'middle', horizontal: 'center' };
-    });
-  });
+  Object.values(entries)
+    .sort((x, y) => x.date.localeCompare(y.date))
+    .forEach((entry, index) => estilizarFila(worksheet.addRow(datosDelDia(entry)), index));
 
   // --- 3. Resumen de métricas (columnas K, L, M; la J queda de separación) ---
   worksheet.getCell('K1').value = 'MÉTRICA LABORAL';
@@ -151,21 +180,68 @@ export const exportMonthToExcel = async (
     });
   });
 
-  // --- 4. Descarga (web) o compartir (Android/iOS) ---
-  const buffer = await workbook.xlsx.writeBuffer();
+  await entregarLibro(workbook, filename);
+};
 
-  if (Platform.OS === 'web') {
-    const url = window.URL.createObjectURL(new Blob([buffer], { type: MIME_XLSX }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-    return;
+export interface OperarioReporte {
+  nombre: string;
+  cedula: string;
+  entries: Record<string, DayEntry>;
+  summary: MonthlySummary;
+}
+
+/** Reporte consolidado del equipo (supervisores): hoja de resumen por operario y hoja con el detalle diario. */
+export const exportEquipoToExcel = async (operarios: OperarioReporte[], currentDate: Date) => {
+  const workbook = new ExcelJS.Workbook();
+  const cierreMes = toLocalDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
+  const filename = `Reporte_Equipo_${currentDate.getFullYear()}_${currentDate.getMonth() + 1}.xlsx`;
+
+  // Resumen
+  const resumen = workbook.addWorksheet('Resumen', { views: [{ state: 'frozen', ySplit: 1 }] });
+  resumen.columns = [
+    { header: 'OPERARIO', key: 'nombre', width: 32 },
+    { header: 'CÉDULA', key: 'cedula', width: 16 },
+    { header: 'DÍAS TRABAJADOS', key: 'dias', width: 14 },
+    { header: 'HORAS REALES', key: 'horas', width: 14 },
+    { header: 'HORAS EXTRAS (> 7.5 h/día)', key: 'extras', width: 16 },
+    { header: `HORAS NOCTURNAS (${getFranjaNocturnaLabel(cierreMes)})`, key: 'nocturnas', width: 18 },
+    { header: `DOMINICALES / FESTIVAS (+${getRecargoDominical(cierreMes)}%)`, key: 'dominicales', width: 18 },
+    { header: 'MARCAS POR REVISAR', key: 'alertas', width: 14 },
+  ];
+  estilizarEncabezado(resumen.getRow(1));
+  operarios.forEach((o, i) => estilizarFila(resumen.addRow({
+    nombre: o.nombre,
+    cedula: o.cedula,
+    dias: o.summary.workedDays,
+    horas: o.summary.totalHours,
+    extras: o.summary.totalHorasExtras,
+    nocturnas: o.summary.totalRecargoNocturno,
+    dominicales: o.summary.totalHoursWithRecargo,
+    alertas: contarAlertas(o.entries),
+  }), i));
+
+  // Detalle diario de todos los operarios
+  const detalle = workbook.addWorksheet('Detalle', { views: [{ state: 'frozen', ySplit: 1 }] });
+  detalle.columns = [
+    { header: 'OPERARIO', key: 'nombre', width: 32 },
+    { header: 'CÉDULA', key: 'cedula', width: 16 },
+    { header: 'FECHA', key: 'fecha', width: 14 },
+    { header: 'HORA ENTRADA', key: 'entrada', width: 16 },
+    { header: 'HORA SALIDA', key: 'salida', width: 16 },
+    { header: 'HORAS REALES', key: 'reales', width: 14 },
+    { header: 'HORAS NOCTURNAS', key: 'nocturnas', width: 16 },
+    { header: 'HORAS EXTRAS', key: 'extras', width: 14 },
+    { header: '¿FESTIVO / DOMINGO?', key: 'festivo', width: 14 },
+    { header: 'NOTAS / NOVEDADES', key: 'notas', width: 35 },
+    { header: 'OBSERVACIONES DE AUDITORÍA', key: 'auditoria', width: 50 },
+  ];
+  estilizarEncabezado(detalle.getRow(1));
+  let fila = 0;
+  for (const o of operarios) {
+    Object.values(o.entries)
+      .sort((x, y) => x.date.localeCompare(y.date))
+      .forEach((entry) => estilizarFila(detalle.addRow({ nombre: o.nombre, cedula: o.cedula, ...datosDelDia(entry) }), fila++));
   }
 
-  const file = new File(Paths.cache, filename);
-  if (file.exists) file.delete();
-  file.write(new Uint8Array(buffer as ArrayBuffer));
-  await Sharing.shareAsync(file.uri, { mimeType: MIME_XLSX, dialogTitle: 'Reporte de horas' });
+  await entregarLibro(workbook, filename);
 };

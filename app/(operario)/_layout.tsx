@@ -1,13 +1,21 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 import { TabBarIcon } from '../../components/TabBarIcon';
-import { WorkHoursProvider } from '../../context/WorkHoursContext';
+import { useWorkHours, WorkHoursProvider } from '../../context/WorkHoursContext';
 import { useTheme } from '../../lib/theme';
 
 export default function TabLayout() {
-  const { colors: c } = useTheme();
   return (
     <WorkHoursProvider>
+      <Pestanas />
+    </WorkHoursProvider>
+  );
+}
+
+function Pestanas() {
+  const { colors: c } = useTheme();
+  const { esSupervisor } = useWorkHours();
+  return (
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -42,6 +50,17 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="equipo"
+          options={{
+            title: 'Equipo',
+            // Solo los supervisores ven esta pestaña
+            href: esSupervisor ? undefined : null,
+            tabBarIcon: ({ color, focused }) => (
+              <TabBarIcon name={focused ? 'people' : 'people-outline'} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="profile"
           options={{
             title: 'Perfil',
@@ -51,6 +70,5 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
-    </WorkHoursProvider>
   );
 }

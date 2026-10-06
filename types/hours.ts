@@ -13,6 +13,8 @@ export interface Marca {
   motivoSinGps?: string;      // Justificación cuando se registró sin ubicación
   ubicacionSimulada?: boolean; // Android reportó una app de GPS falso
   corteMedianoche?: boolean;  // Generada al partir un turno nocturno a las 00:00
+  sinConexion?: boolean;      // Registrada sin señal: la hora es la del celular (validada por el servidor)
+  pendiente?: boolean;        // Guardada en el celular, aún sin enviar
   anulada?: boolean;          // Registro manual anulado: no suma horas
   motivoAnulacion?: string;
   horaIngreso?: string;       // Solo marcas MANUAL (HH:MM, 24 h)

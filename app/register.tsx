@@ -55,7 +55,7 @@ const traducirErrorAuth = (code?: string) => {
     case 'user_already_exists':
     case 'email_exists': return 'Ese correo ya está registrado. Inicia sesión o usa otro correo.';
     case 'email_address_invalid': return 'El correo electrónico no es válido.';
-    case 'weak_password': return 'La contraseña es muy débil (mínimo 6 caracteres).';
+    case 'weak_password': return 'La contraseña es muy débil (mínimo 8 caracteres).';
     case 'captcha_failed': return 'No se pudo verificar que no eres un robot. Inténtalo de nuevo.';
     case 'over_email_send_rate_limit':
     case 'over_request_rate_limit': return 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
@@ -95,7 +95,7 @@ export default function Register() {
       if (!form.apellidos.trim()) e.apellidos = 'Escribe tus apellidos.';
       if (!/^3\d{9}$/.test(form.celular)) e.celular = 'El celular debe tener 10 dígitos y empezar por 3.';
       if (!/^\S+@\S+\.\S+$/.test(form.correo.trim())) e.correo = 'Escribe un correo válido.';
-      if (form.password.length < 6) e.password = 'Mínimo 6 caracteres.';
+      if (form.password.length < 8) e.password = 'Mínimo 8 caracteres.';
     }
     if (paso === 1) {
       if (!form.fechaNacimiento) e.fechaNacimiento = 'Selecciona tu fecha de nacimiento.';
@@ -332,7 +332,7 @@ export default function Register() {
                 hasError={!!errores.correo}
               />
             </FormField>
-            <FormField label="Contraseña" error={errores.password} hint="Mínimo 6 caracteres.">
+            <FormField label="Contraseña" error={errores.password} hint="Mínimo 8 caracteres.">
               <PasswordField
                 value={form.password}
                 onChangeText={set('password')}
