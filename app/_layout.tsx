@@ -51,6 +51,13 @@ function MainAuthGate() {
   const segmentoActual = useRef<string | undefined>(undefined);
   segmentoActual.current = segments[0] as string | undefined;
 
+  // App instalable (PWA): registra el service worker en la web (no en desarrollo, para no guardar versiones viejas)
+  useEffect(() => {
+    if (Platform.OS === 'web' && !__DEV__ && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('No se pudo registrar el service worker:', error));
+    }
+  }, []);
+
   // onAuthStateChange emite INITIAL_SESSION al suscribirse con la sesión guardada (o null)
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event, session) => {

@@ -46,3 +46,17 @@ png(lienzo('', 1024, 1, '#ffffff'), 'android-icon-background.png');
 png(lienzo(monocromo, 1024, 0.6, null), 'android-icon-monochrome.png');
 png(lienzo(interior(simbolo), 1024, 1, null), 'splash-icon.png');
 png(lienzo(interior(simbolo), 192, 0.92, null), 'favicon.png');
+
+// PWA (app instalable desde el navegador): public/brand/
+const brand = path.join(raiz, 'public', 'brand');
+fs.mkdirSync(brand, { recursive: true });
+const pngWeb = (svg, archivo) => {
+  fs.writeFileSync(path.join(brand, archivo), new Resvg(svg, { fitTo: { mode: 'original' } }).render().asPng());
+  console.log(`✓ public/brand/${archivo}`);
+};
+pngWeb(lienzo(interior(simbolo), 192, 0.84, '#ffffff'), 'icon-192.png');
+pngWeb(lienzo(interior(simbolo), 512, 0.84, '#ffffff'), 'icon-512.png');
+// Maskable: Android recorta el ícono en círculo o "squircle"; el símbolo va dentro de la zona segura (80 %)
+pngWeb(lienzo(interior(simbolo), 512, 0.66, '#ffffff'), 'icon-maskable-512.png');
+// iPhone no admite transparencia en el ícono de la pantalla de inicio
+pngWeb(lienzo(interior(simbolo), 180, 0.84, '#ffffff'), 'apple-touch-icon.png');
