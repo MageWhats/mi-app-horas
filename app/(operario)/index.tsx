@@ -1,13 +1,17 @@
 // app/(operario)/index.tsx
 import { TabBarIcon } from "@/components/TabBarIcon";
-import { useRef, useState } from "react";
-import {
-  Animated,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { useState } from "react";
+import { FlatList, LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedReaction,
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { HoursInputModal } from "../../components/HoursInputModal";
 import { ManualRegistrationModal } from "../../components/ManualRegistrationModal";
 import { MonthNavigator } from "../../components/MonthNavigator";
@@ -36,29 +40,42 @@ export default function HomeScreen() {
   const [isManualOpen, setIsManualOpen] = useState(false);
   const todayStr = toLocalDateStr();
 
-  // Desplazamiento de la lista: encoge la tarjeta de ponchado al hacer scroll
-  const scrollY = useRef(new Animated.Value(0)).current;
+  // La tarjeta de ponchado se desplaza con la lista (sin animar alturas, que da tirones).
+  // Cuando sale de la vista, aparece arriba una barra compacta con el estado y el cronómetro.
+  const listaRef = useAnimatedRef<FlatList<string>>();
+  const scrollY = useSharedValue(0);
+  const alturaTarjeta = useSharedValue(430);
+  const [barraVisible, setBarraVisible] = useState(false);
+  const laborando = !!openShift;
 
-  // Altura de la cabecera: de la tarjeta completa a una barra de 60 px
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [430, 60],
-    extrapolate: "clamp",
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
   });
 
-  // La tarjeta de ponchado se desvanece al subir
-  const giantButtonOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
+  // La barra entra cuando el botón de ponchado ya casi no se ve
+  const estiloBarra = useAnimatedStyle(() => {
+    const progreso = interpolate(
+      scrollY.value,
+      [alturaTarjeta.value * 0.6, alturaTarjeta.value * 0.85],
+      [0, 1],
+      Extrapolation.CLAMP,
+    );
+    return { opacity: progreso, transform: [{ translateY: (1 - progreso) * -12 }] };
   });
 
-  // La barra compacta con el cronómetro aparece cuando la tarjeta se oculta
-  const miniTimerOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, 1],
-    extrapolate: "clamp",
-  });
+  // Solo recibe toques cuando está visible
+  useAnimatedReaction(
+    () => scrollY.value > alturaTarjeta.value * 0.7,
+    (visible, previo) => {
+      if (visible !== previo) scheduleOnRN(setBarraVisible, visible);
+    },
+  );
+
+  const medirTarjeta = (e: LayoutChangeEvent) => {
+    alturaTarjeta.value = e.nativeEvent.layout.height;
+  };
+
+  const volverAlPonchado = () => listaRef.current?.scrollToOffset({ offset: 0, animated: true });
 
   // Días del mes visible (AAAA-MM-DD)
   const generateDaysOfMonth = () => {
@@ -319,87 +336,54 @@ export default function HomeScreen() {
       <ScreenContainer>
         <ScreenHeader />
         <AvisosInicio />
-        {/* 🧥 CONTENEDOR ANIMADO SUPERIOR: Se encoge de 450px a 60px al deslizar el dedo */}
-        <Animated.View
-          style={{
-            height: headerHeight,
-            overflow: "hidden",
-            backgroundColor: c.bg,
-          }}
-        >
-          {/* Tarjeta completa de ponchado */}
-          <Animated.View style={{ opacity: giantButtonOpacity, flex: 1 }}>
-            <RealTimePunch />
-          </Animated.View>
+        <View style={{ flex: 1 }}>
+          <Animated.FlatList<string>
+            ref={listaRef}
+            data={generateDaysOfMonth()}
+            keyExtractor={(item) => item}
+            renderItem={renderDayItem}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 120 }} // Espacio para el botón flotante
+            scrollEventThrottle={16}
+            onScroll={onScroll}
+            ListHeaderComponent={
+              <View style={{ backgroundColor: c.bg }}>
+                <View onLayout={medirTarjeta}>
+                  <RealTimePunch />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: "800", color: c.textFaint, letterSpacing: 1, marginTop: 4 }}>
+                  MIS JORNADAS
+                </Text>
+                {/* El navegador de meses va aquí arriba del primer día de la lista */}
+                <MonthNavigator />
+              </View>
+            }
+          />
 
-          {/* Barra compacta con el cronómetro */}
+          {/* Barra compacta: estado del turno; al tocarla vuelve al botón de ponchado */}
           <Animated.View
-            style={{
-              opacity: miniTimerOpacity,
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 60,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 16,
-              backgroundColor: c.surface,
-            }}
+            style={[styles.barra, estiloBarra]}
+            pointerEvents={barraVisible ? "auto" : "none"}
           >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            <TouchableOpacity
+              onPress={volverAlPonchado}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={laborando ? "Ir al botón para finalizar el turno" : "Ir al botón para iniciar la jornada"}
+              style={styles.barraContenido}
             >
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: c.cyan,
-                }}
-              />
-              <Text
-                style={{ color: c.text, fontSize: 13, fontWeight: "700" }}
-              >
-                CRONÓMETRO EN VIVO
+              <View style={[styles.punto, { backgroundColor: laborando ? c.success : c.textFaint }]} />
+              <Text style={[styles.barraEstado, { color: laborando ? c.text : c.textMuted }]}>
+                {laborando ? "En turno" : "Fuera de turno"}
               </Text>
-            </View>
-            <Text
-              style={{
-                color: c.cyan,
-                fontSize: 18,
-                fontWeight: "800",
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {formatSeconds(globalSeconds)}
-            </Text>
+              {laborando && <Text style={styles.barraCronometro}>{formatSeconds(globalSeconds)}</Text>}
+              <View style={[styles.barraAccion, { backgroundColor: laborando ? c.danger : c.primary }]}>
+                <TabBarIcon name={laborando ? "stop-circle" : "play-circle"} size={15} color={c.onPrimary} />
+                <Text style={styles.barraAccionTexto}>{laborando ? "Finalizar" : "Iniciar"}</Text>
+              </View>
+            </TouchableOpacity>
           </Animated.View>
-        </Animated.View>
-
-        {/* 🗓️ LISTA ANIMADA COORDINADA CON EL MOVIMIENTO DEL DEDO */}
-        <Animated.FlatList<string>
-          data={generateDaysOfMonth()}
-          keyExtractor={(item) => item}
-          renderItem={renderDayItem}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 120 }} // Espacio para el botón flotante
-          scrollEventThrottle={16}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }, // La altura no se puede animar con el driver nativo
-          )}
-          ListHeaderComponent={
-            <View style={{ backgroundColor: c.bg, paddingTop: 12 }}>
-              <Text style={{ fontSize: 13, fontWeight: "800", color: c.textFaint, letterSpacing: 1, marginTop: 4 }}>
-                MIS JORNADAS
-              </Text>
-              {/* El navegador de meses va aquí arriba del primer día de la lista */}
-              <MonthNavigator />
-            </View>
-          }
-        />
+        </View>
 
         <HoursInputModal
           isOpen={selectedDate !== null}
@@ -428,6 +412,37 @@ export default function HomeScreen() {
 }
 
 const crearEstilos = (c: Paleta) => StyleSheet.create({
+  barra: { position: "absolute", top: 4, left: 0, right: 0 },
+  barraContenido: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingLeft: 14,
+    paddingRight: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  punto: { width: 8, height: 8, borderRadius: 4 },
+  barraEstado: { fontSize: 14, fontWeight: "700" },
+  barraCronometro: { flex: 1, color: c.cyan, fontSize: 17, fontWeight: "800", fontVariant: ["tabular-nums"] },
+  barraAccion: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+  },
+  barraAccionTexto: { color: c.onPrimary, fontSize: 13, fontWeight: "800" },
   floatingButton: {
     position: "absolute",
     bottom: 24,

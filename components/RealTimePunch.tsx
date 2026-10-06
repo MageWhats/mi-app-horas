@@ -149,10 +149,10 @@ export const RealTimePunch: React.FC = () => {
 };
 
 const crearEstilos = (c: Paleta) => StyleSheet.create({
-  container: { flex: 1, paddingTop: 4, paddingBottom: 12 },
+  container: { paddingTop: 4, paddingBottom: 12 },
   tarjeta: {
-    flex: 1, backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.border,
-    padding: 18, alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.border,
+    padding: 18, alignItems: 'center', gap: 4,
   },
   filaSuperior: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch' },
   pildora: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
