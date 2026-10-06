@@ -89,6 +89,11 @@ Respeta el orden: si se activa en Supabase antes de que la app envíe la verific
 Para desactivarlo: apaga *CAPTCHA protection* en el paso 5 y borra el secreto:
 `delete from vault.secrets where name = 'turnstile_secret';`. Si Cloudflare no responde, el acceso se niega.
 
+Si la app dice *No se pudo verificar que no eres un robot*, la respuesta de Cloudflare queda guardada (7 días):
+`select * from public.captcha_fallos order by fecha desc limit 10;` — `invalid-input-response` = token de otro
+widget (la Site Key de la app y la Secret Key no son del mismo widget); `timeout-or-duplicate` = token vencido o ya
+usado; `invalid-input-secret` = Secret Key mal copiada en el Vault.
+
 La app de Android/iOS muestra la verificación en un WebView que abre `EXPO_PUBLIC_SITE_URL/turnstile.html`, así que
 necesita un **build nuevo** con esas variables.
 

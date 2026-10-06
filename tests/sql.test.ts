@@ -190,6 +190,11 @@ describe('acceso: CAPTCHA, límites y registro restringido', () => {
     expect(await valor(`select public.buscar_acceso('1001', 'TOKEN-VALIDO')`)).toEqual({ estado: 'ok', email: 'ana@x.com' });
     expect(await valor(`select public.email_para_login('1001')`)).toBeNull();
     await comoAdmin();
+    // Los rechazos quedan registrados con la respuesta de Cloudflare
+    const fallos = (await db.query<{ respuesta: string }>('select respuesta from public.captcha_fallos order by id')).rows;
+    expect(fallos.map((f) => f.respuesta)).toEqual([
+      'token vacío o demasiado largo', '{"success": false}', 'excepción: timeout',
+    ]);
     await db.query('delete from vault.secretos');
   });
 
