@@ -1,0 +1,35 @@
+# Verificación de cada cambio: vulnerabilidades, tipos, pruebas (lógica y reglas SQL) y build web
+name: Verificación
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: '0 12 * * 1' # lunes: revisa vulnerabilidades nuevas aunque no haya cambios
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Solo falla con severidad crítica: las alertas altas actuales vienen de herramientas de compilación de
+      # Expo sin parche publicado (braces, node-forge, image-size, decode-uri-component). Ver README.
+      - name: Vulnerabilidades en dependencias
+        run: npm audit --audit-level=critical
+      - run: npm run typecheck
+      # Cálculos legales y migraciones SQL en un PostgreSQL embebido (no toca Supabase)
+      - run: npm test
+      - name: Build web
+        run: npx expo export -p web
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://ci.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: clave-de-ci

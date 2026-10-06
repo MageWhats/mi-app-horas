@@ -1,6 +1,6 @@
 // app/register.tsx
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TouchableOpacity, View,
 } from 'react-native';
@@ -10,12 +10,14 @@ import { SearchSelectField } from '../components/form/SearchSelectField';
 import { SelectField } from '../components/SelectField';
 import { TabBarIcon } from '../components/TabBarIcon';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { Turnstile } from '../components/Turnstile';
 import {
   CIUDADES, ESTADOS_CIVILES, ESTADOS_CON_CONYUGE, GENEROS, NIVELES_ESTUDIO, TIPOS_ID, TIPOS_ID_HIJO, TIPOS_VIA, tipoIdPorEdad,
 } from '../constants/registro';
 import { mostrarAlerta } from '../lib/alert';
 import { supabase } from '../lib/supabase';
 import { alpha, useTheme } from '../lib/theme';
+import { TurnstileHandle } from '../lib/turnstile';
 
 interface HijoData {
   tipoId: string;
@@ -54,6 +56,7 @@ const traducirErrorAuth = (code?: string) => {
     case 'email_exists': return 'Ese correo ya está registrado. Inicia sesión o usa otro correo.';
     case 'email_address_invalid': return 'El correo electrónico no es válido.';
     case 'weak_password': return 'La contraseña es muy débil (mínimo 6 caracteres).';
+    case 'captcha_failed': return 'No se pudo verificar que no eres un robot. Inténtalo de nuevo.';
     case 'over_email_send_rate_limit':
     case 'over_request_rate_limit': return 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
     default: return 'No se pudo completar el registro. Revisa tu conexión e inténtalo de nuevo.';
@@ -67,6 +70,7 @@ export default function Register() {
   const [form, setForm] = useState<FormState>(FORM_INICIAL);
   const [errores, setErrores] = useState<Errores>({});
   const { colors: c } = useTheme();
+  const turnstile = useRef<TurnstileHandle>(null);
 
   const [hijos, setHijos] = useState<HijoData[]>([]);
   const [hijoModal, setHijoModal] = useState(false);
@@ -112,15 +116,25 @@ export default function Register() {
     if (step === 0) {
       setLoading(true);
       try {
-        const { data: disponible, error } = await supabase.rpc('cedula_disponible', { p_cedula: form.cedula });
+        const captcha = await turnstile.current?.obtenerToken();
+        const { data: estado, error } = await supabase.rpc('estado_registro', { p_cedula: form.cedula, p_captcha: captcha ?? null });
         if (error) throw error;
-        if (!disponible) {
-          setErrores({ cedula: 'Este documento ya está registrado. Si es tu cuenta, inicia sesión.' });
+        const mensajes: Record<string, string> = {
+          registrada: 'Este documento ya está registrado. Si es tu cuenta, inicia sesión.',
+          no_autorizada: 'Este documento no está habilitado para registrarse. Pide a la empresa que lo autorice.',
+          invalida: 'Escribe tu número de documento (solo números).',
+          captcha: 'No se pudo verificar que no eres un robot. Inténtalo de nuevo.',
+          limite: 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.',
+        };
+        if (estado !== 'disponible') {
+          setErrores({ cedula: mensajes[estado as string] ?? 'No pudimos verificar tu documento.' });
           return;
         }
       } catch (error) {
         console.error(error);
-        mostrarAlerta('Sin conexión', 'No pudimos verificar tu documento. Revisa tu conexión e inténtalo de nuevo.');
+        mostrarAlerta('Sin conexión', error instanceof Error && error.message.includes('anti-bots')
+          ? error.message
+          : 'No pudimos verificar tu documento. Revisa tu conexión e inténtalo de nuevo.');
         return;
       } finally {
         setLoading(false);
@@ -166,10 +180,12 @@ export default function Register() {
     try {
       // El perfil lo crea un trigger en la misma transacción a partir de estos metadatos,
       // así que si algo falla no queda una cuenta a medias.
+      const captcha = await turnstile.current?.obtenerToken();
       const { data, error } = await supabase.auth.signUp({
         email: form.correo.trim().toLowerCase(),
         password: form.password,
         options: {
+          captchaToken: captcha,
           data: {
             cedula: form.cedula,
             tipo_id: form.tipoId,
@@ -468,6 +484,9 @@ export default function Register() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Verificación anti-bots (solo si está configurada) */}
+        <Turnstile ref={turnstile} />
 
         {/* Botón principal */}
         <TouchableOpacity

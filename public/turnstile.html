@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- Verificación anti-bots (Cloudflare Turnstile) para la app de Android/iOS: se abre dentro de un WebView
+     y devuelve el token a la app con postMessage. En web se usa el widget directamente (components/Turnstile.web.tsx). -->
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Verificación</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: transparent; display: flex; justify-content: center; }
+    </style>
+  </head>
+  <body>
+    <div id="widget"></div>
+    <script src="/turnstile.js"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=iniciarTurnstile&render=explicit" async defer></script>
+  </body>
+</html>

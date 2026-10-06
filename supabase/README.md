@@ -4,16 +4,12 @@
 
 1. **Crear el proyecto** en [supabase.com](https://supabase.com) → *New project*.
    Región recomendada: **South America (São Paulo)**, la más cercana a Colombia. Guarda la contraseña de la base de datos.
-2. **Crear el esquema**: *SQL Editor* → pega el contenido de `migrations/20261005120000_esquema_inicial.sql` → *Run*.
-   (Con la CLI: `npx supabase link --project-ref <ref>` y `npx supabase db push`).
+2. **Crear el esquema**: *SQL Editor* → ejecuta, **en orden**, cada archivo de `migrations/` (el nombre empieza por la
+   fecha). Con la CLI: `npx supabase link --project-ref <ref>` y `npx supabase db push`.
 3. **Confirmación de correo**: *Authentication → Sign In / Providers → Email → Confirm email*.
    - Desactivado: el operario puede iniciar sesión justo después de registrarse.
-   - Activado: debe confirmar desde su correo antes de entrar.
-   La app soporta ambos casos.
-4. **Variables de entorno**: *Project Settings → API*. Copia `.env.example` como `.env` y completa:
-   - `EXPO_PUBLIC_SUPABASE_URL` → Project URL
-   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` → anon / publishable key
-   **Nunca** uses la `service_role` key en la app.
+   - Activado: debe confirmar desde su correo antes de entrar (requiere SMTP propio para enviar a cualquier correo).
+4. **Variables de entorno**: copia `.env.example` como `.env` y complétalo. **Nunca** uses la `service_role` key en la app.
 5. Agrega las mismas variables en **Vercel** (web) y en **EAS** (`npx eas env:create`) para los builds de Android/iOS.
 6. Arranca limpiando la caché: `npx expo start -c`.
 
@@ -24,7 +20,9 @@
 | `profiles` | Un operario por usuario de `auth.users`. Lo crea el trigger `on_auth_user_created` con los metadatos del registro. |
 | `jornadas` | Notas de cada día. Único por operario y fecha. |
 | `marcas` | ENTRADA / SALIDA en tiempo real, registros MANUAL por horario y MANUAL_JORNADA. Nunca se borran. |
-| `auditoria` | Quién creó o cambió qué y cuándo (marcas, jornadas, perfiles). Solo la escriben triggers. |
+| `auditoria` | Quién creó o cambió qué y cuándo (marcas, jornadas, perfiles, cédulas autorizadas). Solo la escriben triggers. |
+| `cedulas_autorizadas` | Lista opcional de cédulas que pueden registrarse (ver *Registro restringido*). |
+| `intentos_acceso` | Intentos de login y registro, para limitar abusos. Se limpia sola. |
 
 Las horas totales, nocturnas y extras **no se guardan**: la app las calcula a partir de las marcas vigentes
 con las reglas legales de cada fecha (`lib/utils.ts`). Domingos y festivos salen del calendario oficial de
@@ -37,13 +35,123 @@ Colombia (Ley Emiliani), no los marca el operario.
 | `ponchar(...)` | Registra ENTRADA o SALIDA con la **hora del servidor** (Colombia). Corta en la medianoche los turnos que empezaron el día anterior, evita marcas dobles (1 minuto) y exige motivo si no hay GPS. |
 | `registrar_manual(...)` | Horas manuales: solo de los últimos 7 días, nunca futuras, sin cruzarse con otras marcas y sin superar 24 h en el día. |
 | `anular_marca(id, motivo)` | Anula un registro manual: queda guardado y tachado, y deja de sumar. Las marcas de entrada y salida no se anulan. |
-| `email_para_login(cedula)` / `cedula_disponible(cedula)` | Login y registro por cédula sin exponer otros datos. |
+| `buscar_acceso(cedula, captcha)` | Correo de acceso de una cédula, con CAPTCHA y límite de intentos (30 por IP y 10 por cédula cada 10 min). |
+| `estado_registro(cedula, captcha)` | Si una cédula puede registrarse (disponible, registrada o no autorizada), con CAPTCHA y límite de intentos. |
 
 ## Seguridad
 
-- RLS en todas las tablas: cada operario solo ve sus propios datos.
-- Las marcas solo se escriben mediante las funciones anteriores: la app no puede insertarlas, editarlas ni borrarlas directamente.
-- Sin sesión solo se pueden usar `email_para_login(cedula)` y `cedula_disponible(cedula)`.
-- El operario no puede modificar su perfil desde la app (solo lectura).
-- `auditoria` no es accesible desde la API: se consulta en el SQL Editor, por ejemplo
-  `select * from public.auditoria order by fecha desc limit 100;`
+| Medida | Cómo |
+|---|---|
+| Claves fuera del código | `.env` (ignorado por Git) y variables de Vercel/EAS. La app solo usa la clave pública `anon`. La Secret Key de Turnstile vive en el Vault de Supabase. |
+| Autorización en el servidor | RLS en todas las tablas: cada operario solo ve sus datos. Las marcas solo se escriben con las funciones anteriores. |
+| Datos que no se pueden manipular | Hora del servidor, marcas que no se borran, anulaciones con motivo, auditoría. |
+| Validación de entradas | En los formularios **y** en la base de datos (largos y formatos del perfil, notas y motivos; listas cerradas). |
+| Intentos de acceso y bots | Límite de intentos en la búsqueda por cédula y el registro + CAPTCHA opcional (Cloudflare Turnstile) + límites de Supabase Auth. |
+| Registro | Abierto o restringido a una lista de cédulas autorizadas. |
+| Cabeceras HTTP | `vercel.json`: CSP estricta, anti-iframe, `nosniff`, HSTS, permisos (solo ubicación). |
+| Dependencias | Dependabot semanal y `npm audit` en cada push (`.github/workflows/ci.yml`). |
+| Pruebas | Cálculos legales y reglas SQL (`npm test`) en cada push, sobre un PostgreSQL embebido. |
+| Copias de seguridad | Cada noche, cifradas con AES-256 (`.github/workflows/respaldo.yml`). |
+
+`auditoria` no es accesible desde la API. Se consulta en el SQL Editor:
+
+```sql
+select * from public.auditoria order by fecha desc limit 100;
+```
+
+### Ajustes en el panel de Supabase
+
+- **Authentication → Rate Limits:** revisa los límites de inicio de sesión y registro.
+- **Authentication → Providers → Email:** sube la longitud mínima de contraseña a **8** (la app pide 6 como mínimo; Supabase aplica la mayor).
+- **Advisors → Security Advisor:** revísalo después de cada migración.
+- **Logs:** consultas a la base de datos, a la API y a Auth (inicios de sesión y fallos).
+
+## CAPTCHA (Cloudflare Turnstile, gratis)
+
+Respeta el orden: si se activa en Supabase antes de que la app envíe la verificación, **nadie podrá entrar**.
+
+1. En [dash.cloudflare.com](https://dash.cloudflare.com) → **Turnstile → Add widget**: dominios `tu-app.vercel.app` y
+   `localhost`, modo *Managed*. Copia la **Site Key** y la **Secret Key**.
+2. En **Vercel** y en **EAS** agrega `EXPO_PUBLIC_TURNSTILE_SITE_KEY` (Site Key) y `EXPO_PUBLIC_SITE_URL`
+   (por ejemplo `https://tu-app.vercel.app`), y despliega de nuevo. La Site Key es pública.
+3. Abre la app: la verificación de Cloudflare debe aparecer en el login y en el registro, y el login debe funcionar.
+4. Guarda la **Secret Key** en el Vault de Supabase (SQL Editor). Desde ese momento la búsqueda por cédula exige un
+   token válido y las funciones antiguas (`email_para_login`, `cedula_disponible`) quedan desactivadas:
+   ```sql
+   select vault.create_secret('LA-SECRET-KEY', 'turnstile_secret', 'Cloudflare Turnstile');
+   ```
+5. En Supabase → **Authentication → Attack Protection** → activa *CAPTCHA protection*, elige **Turnstile** y pega la
+   misma **Secret Key**. Así el inicio de sesión y el registro también exigen la verificación.
+
+Para desactivarlo: apaga *CAPTCHA protection* en el paso 5 y borra el secreto:
+`delete from vault.secrets where name = 'turnstile_secret';`. Si Cloudflare no responde, el acceso se niega.
+
+La app de Android/iOS muestra la verificación en un WebView que abre `EXPO_PUBLIC_SITE_URL/turnstile.html`, así que
+necesita un **build nuevo** con esas variables.
+
+## Registro restringido
+
+Mientras `cedulas_autorizadas` esté vacía, cualquiera puede registrarse. Si tiene al menos una cédula, **solo esas**
+pueden crear cuenta (la base de datos rechaza las demás, aunque se salten la app):
+
+```sql
+-- Autorizar
+insert into public.cedulas_autorizadas (cedula, nombre) values ('1007744230', 'Juan Pérez'), ('1023456789', 'Ana Gómez');
+-- Ver la lista
+select * from public.cedulas_autorizadas order by creada_en desc;
+-- Quitar una
+delete from public.cedulas_autorizadas where cedula = '1007744230';
+```
+
+Quitar una cédula de la lista no borra la cuenta que ya exista; solo impide registrarse a quien no la tenga.
+
+## Copias de seguridad
+
+Cada noche a las 2:00 a. m. (Colombia) la tarea `.github/workflows/respaldo.yml` exporta la base de datos (roles,
+estructura y datos, incluidos los usuarios), verifica que esté completa, la cifra con AES-256 y la guarda **30 días**
+en GitHub → Actions → *Respaldo de la base de datos* → cada ejecución → *Artifacts*. Si falla, GitHub envía un correo.
+
+### Configuración (una sola vez)
+
+En GitHub → Settings → Secrets and variables → **Actions** → *New repository secret*, crea:
+
+1. **`SUPABASE_DB_URL`**: en Supabase pulsa **Connect** → **Session pooler** → copia la URI y reemplaza
+   `[YOUR-PASSWORD]` por la contraseña de la base de datos:
+   `postgresql://postgres.<id>:<contraseña>@aws-0-<región>.pooler.supabase.com:5432/postgres`.
+   Si no la recuerdas: Database → Settings → *Reset database password* (usa solo letras y números).
+   Se usa el *Session pooler* porque GitHub no tiene IPv6.
+2. **`BACKUP_PASSPHRASE`**: una contraseña larga (16 caracteres o más) para cifrar las copias.
+   **Guárdala en un gestor de contraseñas: sin ella las copias no se pueden abrir.**
+
+Luego, en Actions → *Respaldo de la base de datos* → **Run workflow**, para hacer la primera copia y comprobar que
+todo funciona.
+
+### Restaurar
+
+Hazlo sobre un **proyecto nuevo de Supabase** (o uno de prueba), nunca directamente sobre producción sin una copia
+reciente.
+
+1. Descarga el artefacto de la fecha que necesitas y descomprime el zip.
+2. Descifra y extrae (en Git Bash, que ya trae `gpg`):
+   ```bash
+   gpg -d horas-respaldo-AAAA-MM-DD_HHMM.tar.gz.gpg > respaldo.tar.gz   # pide la BACKUP_PASSPHRASE
+   tar -xzf respaldo.tar.gz                                             # crea la carpeta respaldo/
+   ```
+3. Restaura con `psql` usando la URI del proyecto destino:
+   ```bash
+   psql --single-transaction --variable ON_ERROR_STOP=1 \
+     --file respaldo/roles.sql \
+     --file respaldo/esquema.sql \
+     --command 'SET session_replication_role = replica' \
+     --file respaldo/datos.sql \
+     --dbname "postgresql://postgres.<id>:<contraseña>@aws-0-<región>.pooler.supabase.com:5432/postgres"
+   ```
+
+## Pruebas
+
+```bash
+npm test        # cálculos legales (tests/utils.test.ts) y reglas SQL de todas las migraciones (tests/sql.test.ts)
+npm run typecheck
+```
+
+Las pruebas SQL corren en un PostgreSQL embebido (PGlite): no tocan Supabase.

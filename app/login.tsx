@@ -12,8 +12,10 @@ import { LogoCompleto } from '../components/brand/Logo';
 import { FormField, PasswordField, TextField } from '../components/form/FormField';
 import { TabBarIcon } from '../components/TabBarIcon';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { Turnstile } from '../components/Turnstile';
 import { supabase } from '../lib/supabase';
 import { alpha, useTheme, useThemedStyles } from '../lib/theme';
+import { TurnstileHandle } from '../lib/turnstile';
 
 const CLAVE_DOCUMENTO = 'netsec-horas:documento-recordado';
 const SUAVE = Easing.bezier(0.22, 1, 0.36, 1);
@@ -29,6 +31,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passwordRef = useRef<TextInput>(null);
+  const turnstile = useRef<TurnstileHandle>(null);
 
   // Entrada: el logo baja con un fundido y luego aparece la tarjeta
   const logo = useSharedValue(0);
@@ -64,21 +67,44 @@ export default function Login() {
 
     setLoading(true);
     try {
-      // 1. Traducir la cédula al correo de acceso (función segura: no expone otros datos del perfil)
-      const { data: email, error: rpcError } = await supabase.rpc('email_para_login', { p_cedula: cedula.trim() });
+      // 1. Traducir la cédula al correo de acceso. La base de datos verifica el CAPTCHA (si está activo)
+      //    y limita los intentos por IP y por cédula; no expone ningún otro dato del perfil.
+      const captchaBusqueda = await turnstile.current?.obtenerToken();
+      const { data: acceso, error: rpcError } = await supabase.rpc('buscar_acceso', {
+        p_cedula: cedula.trim(),
+        p_captcha: captchaBusqueda ?? null,
+      });
       if (rpcError) throw rpcError;
-      if (!email) {
-        setError('No encontramos un operario registrado con ese documento.');
+
+      const { estado, email } = acceso as { estado: string; email?: string };
+      if (estado === 'limite') {
+        setError('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.');
+        return;
+      }
+      if (estado === 'captcha') {
+        setError('No se pudo verificar que no eres un robot. Inténtalo de nuevo.');
+        return;
+      }
+      if (estado !== 'ok' || !email) {
+        setError('El documento o la contraseña no son correctos.');
         return;
       }
 
-      // 2. Autenticar. La navegación (y la animación de entrada) las hace app/_layout.tsx al detectar la sesión.
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      // 2. Autenticar (Supabase Auth verifica su propio token de CAPTCHA si la protección está activa).
+      //    La navegación y la animación de entrada las hace app/_layout.tsx al detectar la sesión.
+      const captchaAcceso = await turnstile.current?.obtenerToken();
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+        options: { captchaToken: captchaAcceso },
+      });
       if (authError) {
         if (authError.code === 'email_not_confirmed') {
           setError('Confirma tu cuenta desde el enlace que te enviamos al correo.');
         } else if (authError.code === 'invalid_credentials') {
           setError('El documento o la contraseña no son correctos.');
+        } else if (authError.code === 'captcha_failed') {
+          setError('No se pudo verificar que no eres un robot. Inténtalo de nuevo.');
         } else if (authError.status === 429 || authError.code === 'over_request_rate_limit') {
           setError('Demasiados intentos seguidos. Espera unos minutos.');
         } else {
@@ -91,7 +117,9 @@ export default function Login() {
       else await AsyncStorage.removeItem(CLAVE_DOCUMENTO).catch(() => undefined);
     } catch (e) {
       console.error(e);
-      setError('No pudimos conectarnos. Revisa tu internet e inténtalo de nuevo.');
+      setError(e instanceof Error && e.message.includes('anti-bots')
+        ? e.message
+        : 'No pudimos conectarnos. Revisa tu internet e inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -168,6 +196,8 @@ export default function Login() {
             </View>
             <Text style={styles.recordarTexto}>Recordar mi documento</Text>
           </Pressable>
+
+          <Turnstile ref={turnstile} />
 
           {error && (
             <View style={styles.error} accessibilityRole="alert">
