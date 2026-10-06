@@ -530,7 +530,7 @@ export default function Register() {
             <FormField label="Tipo de documento">
               <SelectField value={hijo.tipoId} onChange={(v) => setHijo((h) => ({ ...h, tipoId: v }))} options={TIPOS_ID_HIJO} />
             </FormField>
-            <FormField label="Número de documento" optional hint="Puedes completarlo después con nómina.">
+            <FormField label="Número de documento" optional hint="Puedes dejarlo vacío si aún no lo tienes.">
               <TextField value={hijo.id} onChangeText={(t) => setHijo((h) => ({ ...h, id: t.replace(/\D/g, '') }))} keyboardType="number-pad" placeholder="Solo números" maxLength={15} />
             </FormField>
             {!!hijoError && <Text style={{ color: c.danger, fontSize: 13, marginBottom: 10 }}>{hijoError}</Text>}

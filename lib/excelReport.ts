@@ -15,8 +15,8 @@ const getEntradaSalida = (entry: DayEntry) => {
   const ultimaSalida = [...marcas].reverse().find((m) => m.tipo === 'SALIDA' || m.tipo === 'MANUAL');
 
   return {
-    entrada: entry.startTime || primeraEntrada?.horaIngreso || (primeraEntrada?.tipo === 'ENTRADA' ? primeraEntrada.hora : ''),
-    salida: entry.endTime || ultimaSalida?.horaSalida || (ultimaSalida?.tipo === 'SALIDA' ? ultimaSalida.hora : ''),
+    entrada: primeraEntrada?.horaIngreso || (primeraEntrada?.tipo === 'ENTRADA' ? primeraEntrada.hora : ''),
+    salida: ultimaSalida?.horaSalida || (ultimaSalida?.tipo === 'SALIDA' ? ultimaSalida.hora : ''),
   };
 };
 

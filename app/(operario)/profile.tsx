@@ -19,8 +19,6 @@ interface Profile {
   direccion: string | null;
   barrio: string | null;
   fecha_nacimiento: string | null;
-  status: string;
-  position: string;
 }
 
 /** Iniciales para el avatar: "Juan Carlos Pérez" → "JC" */
@@ -48,7 +46,7 @@ export default function ProfileScreen() {
         // RLS solo devuelve el perfil del operario con sesión activa
         const { data, error } = await supabase
           .from('profiles')
-          .select('cedula, email, full_name, celular, direccion, barrio, fecha_nacimiento, status, position')
+          .select('cedula, email, full_name, celular, direccion, barrio, fecha_nacimiento')
           .maybeSingle();
         if (error) throw error;
         if (isMounted) setUserData(data);
@@ -118,7 +116,6 @@ export default function ProfileScreen() {
     );
   }
 
-  const pendiente = (userData?.status ?? '').toUpperCase() === 'PENDIENTE';
   const direccion = userData?.direccion
     ? `${userData.direccion}${userData.barrio ? ` · ${userData.barrio}` : ''}`
     : null;
@@ -142,19 +139,6 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.nombre}>{userData?.full_name || 'Operario'}</Text>
           <Text style={styles.correo}>{userData?.email}</Text>
-          <View style={styles.insignias}>
-            <View style={[styles.insignia, { backgroundColor: alpha(c.primary, 0.12) }]}>
-              <Text style={[styles.insigniaTexto, { color: c.primary }]}>{userData?.position || 'OPERARIO'}</Text>
-            </View>
-            <View style={[styles.insignia, { backgroundColor: alpha(pendiente ? c.warning : c.success, 0.12) }]}>
-              <Text style={[styles.insigniaTexto, { color: pendiente ? c.warning : c.success }]}>
-                {pendiente ? 'REGISTRO PENDIENTE' : userData?.status || 'ACTIVO'}
-              </Text>
-            </View>
-          </View>
-          {pendiente && (
-            <Text style={styles.avisoPendiente}>Nómina revisará tus datos para completar tu registro.</Text>
-          )}
         </View>
 
         {/* Datos */}
@@ -231,10 +215,6 @@ const crearEstilos = (c: Paleta) => StyleSheet.create({
   avatarTexto: { fontSize: 30, fontWeight: '800', color: c.onPrimary },
   nombre: { fontSize: 20, fontWeight: '800', color: c.text, textAlign: 'center' },
   correo: { fontSize: 14, color: c.textMuted, marginTop: 2, textAlign: 'center' },
-  insignias: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 14 },
-  insignia: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
-  insigniaTexto: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  avisoPendiente: { color: c.textMuted, fontSize: 12, textAlign: 'center', marginTop: 10 },
   seccion: { color: c.textFaint, fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: 22, marginBottom: 8, marginLeft: 4 },
   tarjeta: { backgroundColor: c.surface, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: c.border },
   fila: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },

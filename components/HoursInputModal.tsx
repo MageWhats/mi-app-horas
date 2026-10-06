@@ -28,11 +28,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
   const marcasDelDia: Marca[] = dayData?.marcas ?? [];
 
   // Los días con registro manual quedan fijados: festivo y notas se definieron al crearlos
-  const tipoIngresoDia = dayData?.tipoIngreso || '';
-  const tieneMarcasManuales = marcasDelDia.some((m) => m.tipo === 'MANUAL' || m.tipo === 'MANUAL_JORNADA');
-  
-  // Candado de seguridad: Se activa si Firestore dice que es MANUAL o si contiene marcas manuales
-  const esRegistroManual = tipoIngresoDia === 'MANUAL' || tipoIngresoDia === 'MANUAL_JORNADA' || tieneMarcasManuales;
+  const esRegistroManual = marcasDelDia.some((m) => m.tipo === 'MANUAL' || m.tipo === 'MANUAL_JORNADA');
 
   // Carga el formulario solo al abrir: así una actualización en vivo no borra lo que se está escribiendo
   useEffect(() => {
@@ -113,7 +109,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               </TouchableOpacity>
             </View>
 
-            {/* PANEL DE AUDITORÍA: Línea de tiempo real con GPS */}
+            {/* Marcas del día */}
             <Text style={{ fontSize: 13, color: c.textMuted, marginBottom: 10, fontWeight: '700', letterSpacing: 0.5 }}>
               FRACCIONES DE JORNADA REGISTRADAS
             </Text>
@@ -171,7 +167,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               </View>
             )}
 
-            {/* INTERRUPTOR DE DOMINGO / FESTIVO CONDICIONADO */}
+            {/* Domingo o festivo (bloqueado en días con registro manual) */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: c.surface, padding: 14, borderRadius: 14, marginBottom: 20, borderWidth: 1, borderColor: alpha(c.borderStrong, 0.13), opacity: esRegistroManual ? 0.5 : 1 }}>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={{ fontSize: 14, color: c.text, fontWeight: '500', marginBottom: 2 }}>¿Es Domingo o Festivo?</Text>
@@ -180,7 +176,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
                 </Text>
               </View>
               <Switch 
-                disabled={esRegistroManual} // Candado 1: Apaga el switch si es manual
+                disabled={esRegistroManual}
                 value={isHoliday} 
                 onValueChange={setIsHoliday} 
                 trackColor={{ false: c.bg, true: alpha(c.primary, 0.25) }} 
@@ -188,11 +184,11 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               />
             </View>
 
-            {/* CUADRO DE TEXTO DE NOTAS CONDICIONADO */}
+            {/* Notas (bloqueadas en días con registro manual) */}
             <View style={{ marginBottom: 24 }}>
               <Text style={{ fontSize: 13, color: c.textMuted, marginBottom: 8, fontWeight: '500' }}>Notas / Actividades</Text>
               <TextInput
-                editable={!esRegistroManual} // Candado 2: Se vuelve de solo lectura si es manual
+                editable={!esRegistroManual}
                 value={notes} 
                 onChangeText={setNotes} 
                 placeholder={esRegistroManual ? "Notas fijadas en registro manual." : "Escribe aquí las novedades del día..."} 
@@ -209,7 +205,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               </Text>
             )}
 
-            {/* BOTONERA DE ACCIÓN CONDICIONADA */}
+            {/* Acciones */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 }}>
               {hasExistingData && (
                 <TouchableOpacity
@@ -223,7 +219,7 @@ export const HoursInputModal: React.FC<HoursInputModalProps> = ({ isOpen, onClos
               
               <TouchableOpacity
                 onPress={handleSave}
-                disabled={saving || esRegistroManual} // Candado 3: Inhabilita por completo el clic si es manual
+                disabled={saving || esRegistroManual}
                 style={{ 
                   flex: 1, 
                   backgroundColor: esRegistroManual ? c.surfaceAlt : saving ? c.surface : c.primary, 

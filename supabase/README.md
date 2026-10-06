@@ -32,4 +32,4 @@ con las reglas legales vigentes en cada fecha (`lib/utils.ts`).
 
 - RLS en todas las tablas: cada operario solo ve y modifica sus propios datos.
 - Sin sesión solo se pueden usar `email_para_login(cedula)` y `cedula_disponible(cedula)`.
-- Los campos de nómina del perfil (`status`, `position`) no los puede modificar el operario.
+- El operario no puede modificar su perfil desde la app (solo lectura).

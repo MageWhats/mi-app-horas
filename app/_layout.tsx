@@ -1,6 +1,5 @@
 // app/_layout.tsx
 import type { User } from '@supabase/supabase-js';
-import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -31,19 +30,15 @@ const marcarSplashVisto = () => {
 };
 
 export default function RootLayout() {
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
   return (
     <ThemeProvider>
-      <MainAuthGate loaded={loaded} />
+      <MainAuthGate />
     </ThemeProvider>
   );
 }
 
 // Guardián de navegación: decide entre las pantallas públicas y la app del operario
-function MainAuthGate({ loaded }: { loaded: boolean }) {
+function MainAuthGate() {
   const { esOscuro, colors } = useTheme();
   const router = useRouter();
   const segments = useSegments();
@@ -78,7 +73,7 @@ function MainAuthGate({ loaded }: { loaded: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (initializing || !loaded) return;
+    if (initializing) return;
 
     const currentSegment = segments[0] as string | undefined;
     const isInLogin = currentSegment === 'login' || currentSegment === undefined;
@@ -90,9 +85,9 @@ function MainAuthGate({ loaded }: { loaded: boolean }) {
       router.replace('/login');
     }
     // El registro gestiona su propia navegación al terminar (crea la cuenta y cierra la sesión).
-  }, [user, initializing, segments, loaded]);
+  }, [user, initializing, segments]);
 
-  if (initializing || !loaded) {
+  if (initializing) {
     // Mismo color que el splash nativo, para que no haya destellos
     return <View style={{ flex: 1, backgroundColor: PALETA_OSCURA.bg }} />;
   }

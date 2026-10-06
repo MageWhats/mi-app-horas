@@ -1,10 +1,10 @@
 // components/SummaryCard.tsx
 import React from 'react';
 import { Text, View } from 'react-native';
+import { alpha, useTheme } from '../lib/theme';
 import { getFranjaNocturnaLabel, getRecargoDominical, toLocalDateStr } from '../lib/utils';
 import { MonthlySummary } from '../types/hours';
 import { TabBarIcon } from './TabBarIcon';
-import { alpha, useTheme } from '../lib/theme'; // Conectado al nuevo sistema vectorial
 
 interface SummaryCardProps {
   summary: MonthlySummary;

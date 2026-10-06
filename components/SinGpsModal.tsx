@@ -132,7 +132,7 @@ export const SinGpsModal: React.FC<SinGpsModalProps> = ({
               ¿Registrar la {tipoMarca.toLowerCase()} sin GPS?
             </Text>
             <Text style={{ color: c.textMuted, fontSize: 12, marginBottom: 12 }}>
-              Indica el motivo. Quedará registrado junto a la marca y lo podrá ver nómina.
+              Indica el motivo. Quedará guardado junto a la marca y aparecerá en el reporte de Excel.
             </Text>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>

@@ -19,7 +19,15 @@ import { alpha, Paleta, useTheme, useThemedStyles } from "../../lib/theme";
 import { calculateRealtimeHours, toLocalDateStr } from "../../lib/utils";
 import { Marca } from "../../types/hours";
 
-export default function RegisterScreen() {
+/** Duración legible según la escala: segundos, minutos u horas con un decimal. */
+const formatDuracion = (horas: number) => {
+  const segundos = horas * 3600;
+  if (segundos < 60) return `${Math.round(segundos)}s`;
+  if (horas < 1) return `${Math.round(horas * 60)}m`;
+  return `${horas.toFixed(1)}h`;
+};
+
+export default function HomeScreen() {
   const { entries, currentDate, globalSeconds, openShift } = useWorkHours();
   const { colors: c } = useTheme();
   const styles = useThemedStyles(crearEstilos);
@@ -27,31 +35,31 @@ export default function RegisterScreen() {
   const [isManualOpen, setIsManualOpen] = useState(false);
   const todayStr = toLocalDateStr();
 
-  // 🎢 EL CABLE INVISIBLE: Rastreará la posición del dedo en píxeles (ej: 0 a 200px)
+  // Desplazamiento de la lista: encoge la tarjeta de ponchado al hacer scroll
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // 1. ANIMACIÓN DE ALTURA: Se encoge de 450px a solo 60px
+  // Altura de la cabecera: de la tarjeta completa a una barra de 60 px
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [430, 60],
     extrapolate: "clamp",
   });
 
-  // 2. ANIMACIÓN DE OPACIDAD DEL BOTÓN GIGANTE: Se desvanece al subir el dedo
+  // La tarjeta de ponchado se desvanece al subir
   const giantButtonOpacity = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
 
-  // 3. ANIMACIÓN DE OPACIDAD DEL MINI CRONÓMETRO: Aparece solo cuando el gigante se oculta
+  // La barra compacta con el cronómetro aparece cuando la tarjeta se oculta
   const miniTimerOpacity = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
 
-  // Genera los días del mes seleccionado de forma dinámica
+  // Días del mes visible (AAAA-MM-DD)
   const generateDaysOfMonth = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -88,7 +96,7 @@ export default function RegisterScreen() {
           borderColor: isToday ? c.primary : c.border,
         }}
       >
-        {/* FILA SUPERIOR: Número de día y Estado Completado */}
+        {/* Número del día y etiquetas */}
         <View
           style={{
             flexDirection: "row",
@@ -155,7 +163,7 @@ export default function RegisterScreen() {
           )}
         </View>
 
-        {/* CONTENEDOR HÍBRIDO (Marcas vs Horas Totales a la Derecha) */}
+        {/* Marcas del día a la izquierda, duración a la derecha */}
         <View
           style={{
             flexDirection: "row",
@@ -164,7 +172,7 @@ export default function RegisterScreen() {
             marginTop: 8,
           }}
         >
-          {/* COLUMNA IZQUIERDA: Fracciones de jornada */}
+          {/* Marcas del día */}
           <View style={{ flex: 1, gap: 4, paddingRight: 12 }}>
             {marcasDelDia.length === 0 ? (
               <Text
@@ -177,7 +185,6 @@ export default function RegisterScreen() {
                 const esEntrada = punch.tipo === "ENTRADA";
                 const esManual = punch.tipo === "MANUAL" || punch.tipo === "MANUAL_JORNADA";
 
-                // Normalizamos visualmente cualquier variación para que pinte "Entra" o "Sale"
                 const etiquetaTipo = esManual
                   ? "Manual"
                   : esEntrada
@@ -227,13 +234,12 @@ export default function RegisterScreen() {
             )}
           </View>
 
-          {/* ⏱️ COLUMNA DERECHA FIJA: Cápsula inteligente multi-escala */}
-
+          {/* Columna derecha: indicador de GPS y duración del día */}
           {marcasDelDia.length > 0 && (
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
-              {/* Activamos el mapa si alguna marca real tiene coordenadas GPS registradas O si es un registro manual */}
+              {/* Ícono de mapa: resaltado si alguna marca tiene GPS */}
               {(marcasDelDia.some(
                 (m) => m.latitude !== undefined && m.latitude !== null,
               ) ||
@@ -280,100 +286,19 @@ export default function RegisterScreen() {
                   justifyContent: "center",
                 }}
               >
-                {(() => {
-                  const totalSegundos = tiempoCalculado * 3600;
-                  const totalMinutos = tiempoCalculado * 60;
-
-                  if (totalSegundos <= 0) {
-                    // Turno abierto sin tramos cerrados todavía
-                    return (
-                      <Text style={{ fontSize: 12, color: c.cyan, fontWeight: "800" }}>
-                        {openShift?.date === dayStr ? "En curso" : "—"}
-                      </Text>
-                    );
-                  } else if (totalSegundos < 60) {
-                    // ⚡ Escala Segundos (Menor a 1 minuto)
-                    return (
-                      <>
-                        <Text
-                          style={{
-                            fontSize: 14,
-                            color: c.cyan,
-                            fontWeight: "800",
-                            fontVariant: ["tabular-nums"],
-                          }}
-                        >
-                          {Math.round(totalSegundos)}s
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            color: c.textMuted,
-                            fontWeight: "700",
-                            marginTop: 1,
-                            textTransform: "lowercase",
-                          }}
-                        >
-                          Total
-                        </Text>
-                      </>
-                    );
-                  } else if (tiempoCalculado < 1) {
-                    // ⏱️ Escala Minutos (Entre 1 minuto y 1 hora) -> ¡Aquí caerán tus 1m y 10s!
-                    return (
-                      <>
-                        <Text
-                          style={{
-                            fontSize: 14,
-                            color: c.cyan,
-                            fontWeight: "800",
-                            fontVariant: ["tabular-nums"],
-                          }}
-                        >
-                          {Math.round(totalMinutos)}m
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            color: c.textMuted,
-                            fontWeight: "700",
-                            marginTop: 1,
-                            textTransform: "lowercase",
-                          }}
-                        >
-                          Total
-                        </Text>
-                      </>
-                    );
-                  } else {
-                    // 💼 Escala Horas (Mayor a 1 hora)
-                    return (
-                      <>
-                        <Text
-                          style={{
-                            fontSize: 14,
-                            color: c.cyan,
-                            fontWeight: "800",
-                            fontVariant: ["tabular-nums"],
-                          }}
-                        >
-                          {tiempoCalculado.toFixed(1)}h
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            color: c.textMuted,
-                            fontWeight: "700",
-                            marginTop: 1,
-                            textTransform: "lowercase",
-                          }}
-                        >
-                          Total
-                        </Text>
-                      </>
-                    );
-                  }
-                })()}
+                {tiempoCalculado > 0 ? (
+                  <>
+                    <Text style={{ fontSize: 14, color: c.cyan, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
+                      {formatDuracion(tiempoCalculado)}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: c.textMuted, fontWeight: "700", marginTop: 1 }}>total</Text>
+                  </>
+                ) : (
+                  // Turno abierto sin tramos cerrados todavía
+                  <Text style={{ fontSize: 12, color: c.cyan, fontWeight: "800" }}>
+                    {openShift?.date === dayStr ? "En curso" : "—"}
+                  </Text>
+                )}
               </View>
             </View>
           )}
@@ -411,12 +336,12 @@ export default function RegisterScreen() {
             backgroundColor: c.bg,
           }}
         >
-          {/* VISTA A: El panel gigante con el cronómetro (Se desvanece al subir) */}
+          {/* Tarjeta completa de ponchado */}
           <Animated.View style={{ opacity: giantButtonOpacity, flex: 1 }}>
             <RealTimePunch />
           </Animated.View>
 
-          {/* VISTA B: La barra compacta superior (Aparece solo al encogerse) */}
+          {/* Barra compacta con el cronómetro */}
           <Animated.View
             style={{
               opacity: miniTimerOpacity,
@@ -468,11 +393,11 @@ export default function RegisterScreen() {
           keyExtractor={(item) => item}
           renderItem={renderDayItem}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 120 }} // Más espacio para que no tape el botón flotante
-          scrollEventThrottle={16} // Captura el movimiento a 60 cuadros por segundo para máxima suavidad
+          contentContainerStyle={{ paddingBottom: 120 }} // Espacio para el botón flotante
+          scrollEventThrottle={16}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }, // Obligatorio en false para animar la altura (height)
+            { useNativeDriver: false }, // La altura no se puede animar con el driver nativo
           )}
           ListHeaderComponent={
             <View style={{ backgroundColor: c.bg, paddingTop: 12 }}>
@@ -491,14 +416,14 @@ export default function RegisterScreen() {
           dateStr={selectedDate}
         />
 
-        {/* 🚨 NUEVO MODAL DE NOVEDADES MANUALES CON SELECTOR DE FECHA */}
+        {/* Registro manual (por horario o jornada directa) */}
         <ManualRegistrationModal
           isOpen={isManualOpen}
           onClose={() => setIsManualOpen(false)}
         />
       </ScreenContainer>
 
-      {/* BOTÓN FLOTANTE TOTALMENTE REESTRUCTURADO ABAJO A LA DERECHA */}
+      {/* Botón flotante de registro manual */}
       <TouchableOpacity
         onPress={() => setIsManualOpen(true)} // <-- Abre el nuevo módulo manual
         activeOpacity={0.85}

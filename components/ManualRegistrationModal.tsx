@@ -27,7 +27,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
   const styles = useThemedStyles(crearEstilos);
   const { addManualEntry, currentDate } = useWorkHours();
 
-  // Estados del formulario manual existentes
+  // Formulario
   const [selectedDay, setSelectedDay] = useState("");
   const [dateObject, setDateObject] = useState(new Date());
   const [showAndroidPicker, setShowAndroidPicker] = useState(false);
@@ -36,13 +36,13 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Selector de hora nativo existente
+  // Selectores de hora nativos (Android/iOS)
   const [startTimeObject, setStartTimeObject] = useState(new Date());
   const [endTimeObject, setEndTimeObject] = useState(new Date());
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
-  // NUEVOS ESTADOS SENIOR: Control de modalidad de jornadas
+  // Modalidad: por horario (entrada y salida) o por jornada directa (horas netas)
   const [modoRegistro, setModoRegistro] = useState<'HORARIO' | 'JORNADA'>('HORARIO');
   const [horasJornadaDirecta, setHorasJornadaDirecta] = useState('8');
   const [esFestivoJornada, setEsFestivoJornada] = useState(false);
@@ -130,7 +130,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingBottom: 10 }}>
 
-            {/* SWITCH SELECTOR DE MODALIDAD (ESTÉTICA INTEGRADA DE TUS PANELES) */}
+            {/* Selector de modalidad */}
             <View style={{ flexDirection: "row", gap: 10, marginBottom: 4 }}>
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -148,7 +148,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
               </TouchableOpacity>
             </View>
 
-            {/* SELECCIONA EL DÍA DEL MES (COMÚN PARA AMBOS MODOS) */}
+            {/* Día del mes (común a ambas modalidades) */}
             <View>
               <Text style={styles.inputLabel}>SELECCIONA EL DÍA DEL MES</Text>
               {Platform.OS === "web" ? (
@@ -187,7 +187,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
               )}
             </View>
 
-            {/* INTERFAZ CONDICIONAL 1: POR HORARIO (RELOJ ORIGINAL) */}
+            {/* Modalidad por horario */}
             {modoRegistro === 'HORARIO' && (
               <View style={{ flexDirection: "row", gap: 12 }}>
                 <View style={{ flex: 1 }}>
@@ -208,7 +208,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                         <Text style={{ color: startHour ? c.text : c.textFaint, fontSize: 13, paddingTop: 10 }}>{startHour ? startHour : "Elegir... "}</Text>
                       </TouchableOpacity>
                       {showStartPicker && (
-                        <DateTimePicker value={startTimeObject} mode="time" is24Hour={false} display="default" onChange={(event, date) => {
+                        <DateTimePicker value={startTimeObject} mode="time" is24Hour={false} display="default" onChange={(_event, date) => {
                           setShowStartPicker(false);
                           if (date) {
                             setStartTimeObject(date);
@@ -239,7 +239,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                         <Text style={{ color: endHour ? c.text : c.textFaint, fontSize: 13, paddingTop: 10 }}>{endHour ? endHour : "Elegir... "}</Text>
                       </TouchableOpacity>
                       {showEndPicker && (
-                        <DateTimePicker value={endTimeObject} mode="time" is24Hour={false} display="default" onChange={(event, date) => {
+                        <DateTimePicker value={endTimeObject} mode="time" is24Hour={false} display="default" onChange={(_event, date) => {
                           setShowEndPicker(false);
                           if (date) {
                             setEndTimeObject(date);
@@ -254,7 +254,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
               </View>
             )}
 
-            {/* INTERFAZ CONDICIONAL 2: POR JORNADA DIRECTA */}
+            {/* Modalidad por jornada directa */}
             {modoRegistro === 'JORNADA' && (
               <View style={{ gap: 12 }}>
                 <View>
@@ -288,7 +288,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
               </View>
             )}
 
-            {/* NOTAS DE JUSTIFICACIÓN */}
+            {/* Justificación */}
             <View>
               <Text style={styles.inputLabel}>JUSTIFICACIÓN / OBSERVACIÓN</Text>
               <TextInput

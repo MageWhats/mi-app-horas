@@ -20,14 +20,10 @@ export interface Marca {
 
 export interface DayEntry {
   date: string;               // Formato "YYYY-MM-DD"
-  startTime?: string;         // Hora de entrada (solo registro manual por horario)
-  endTime?: string;           // Hora de salida (solo registro manual por horario)
-  hours: number;              // Total de horas reales del día
-  totalHours?: number;        // Campo tal como se guarda en Firestore
+  hours: number;              // Total de horas del día (calculado a partir de las marcas)
   nightHours: number;         // Horas dentro de la franja nocturna (21:00 - 06:00)
   isHolidayOrSunday: boolean; // Aplica recargo dominical/festivo
   notes?: string | null;
-  tipoIngreso?: string;
   marcas?: Marca[];
 }
 

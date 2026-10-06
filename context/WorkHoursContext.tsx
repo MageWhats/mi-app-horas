@@ -147,16 +147,13 @@ const buildEntries = (jornadas: JornadaRow[], marcaRows: MarcaRow[]): Record<str
     const marcas = marcasPorDia[date] ?? [];
     const { totalHours, nightHours } = computeDayTotals(date, marcas);
     const detalle = detalles[date];
-    const tieneRealtime = marcas.some((m) => m.tipo === 'ENTRADA' || m.tipo === 'SALIDA');
 
     result[date] = {
       date,
       hours: totalHours,
-      totalHours,
       nightHours,
       isHolidayOrSunday: detalle?.es_festivo ?? false,
       notes: detalle?.notas ?? null,
-      tipoIngreso: tieneRealtime ? 'REALTIME' : marcas[0]?.tipo ?? 'MANUAL',
       marcas,
     };
   });

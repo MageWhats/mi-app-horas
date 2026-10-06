@@ -81,7 +81,7 @@ export default function SummaryScreen() {
               gap: 8,
               borderWidth: 1,
               borderColor: c.success,
-              marginTop: 4, // Pequeño ajuste para despegarlo del navegador
+              marginTop: 4,
               opacity: exporting || !hasEntries ? 0.5 : 1,
             }}
           >
@@ -124,7 +124,7 @@ export default function SummaryScreen() {
             <>
               <SummaryCard summary={summary} currentDate={currentDate} />
             
-              {/* ⚠️ TARJETA DE ALERTA DE JORNADA MÁXIMA DETECTADA */}
+              {/* Alerta por semana que supera el límite legal */}
               {weeklyOvertimeAlerts.map(({ hours, index, limit, range }) => {
                 const extraHours = (hours - limit).toFixed(1);
                 return (
@@ -148,5 +148,3 @@ export default function SummaryScreen() {
     </ScreenContainer>
   );
 }
-
-// Estilos de cabecera limpia integrados abajo

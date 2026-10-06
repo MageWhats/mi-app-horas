@@ -54,9 +54,6 @@ const esMinutoNocturno = (minutoDelDia: number, inicioNoche: number) =>
 export const toLocalDateStr = (date: Date = new Date()): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-/** Año-mes local en formato AAAA-MM. */
-export const toYearMonth = (date: Date = new Date()): string => toLocalDateStr(date).slice(0, 7);
-
 /** Suma (o resta) días a una fecha AAAA-MM-DD. */
 export const addDays = (dateStr: string, days: number): string => {
   const date = new Date(dateStr + 'T00:00:00');
