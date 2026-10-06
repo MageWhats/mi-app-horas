@@ -1,13 +1,15 @@
 // app/_layout.tsx
-import { useColorScheme } from '@/components/useColorScheme';
+import type { User } from '@supabase/supabase-js';
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, View } from 'react-native';
 import 'react-native-reanimated';
-import { auth } from '../lib/firebase';
+import { SplashAnimation } from '../components/brand/SplashAnimation';
+import { supabase } from '../lib/supabase';
+import { PALETA_OSCURA, ThemeProvider, useTheme } from '../lib/theme';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -17,28 +19,63 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync();
 
+/** En web la animación se muestra una vez por pestaña: al recargar no se repite (salvo al iniciar sesión). */
+const CLAVE_SPLASH_WEB = 'netsec-horas:splash-visto';
+const splashYaVisto = () => {
+  if (Platform.OS !== 'web') return false;
+  try { return sessionStorage.getItem(CLAVE_SPLASH_WEB) === '1'; } catch { return false; }
+};
+const marcarSplashVisto = () => {
+  if (Platform.OS !== 'web') return;
+  try { sessionStorage.setItem(CLAVE_SPLASH_WEB, '1'); } catch { /* sin almacenamiento */ }
+};
+
 export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
-  return <MainAuthGate loaded={loaded} />;
+  return (
+    <ThemeProvider>
+      <MainAuthGate loaded={loaded} />
+    </ThemeProvider>
+  );
 }
 
 // Guardián de navegación: decide entre las pantallas públicas y la app del operario
 function MainAuthGate({ loaded }: { loaded: boolean }) {
-  const colorScheme = useColorScheme();
+  const { esOscuro, colors } = useTheme();
   const router = useRouter();
   const segments = useSegments();
 
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [splash, setSplash] = useState<{ nombre?: string } | null>(null);
 
-  useEffect(() => onAuthStateChanged(auth, (currentUser) => {
-    setUser(currentUser);
-    setInitializing(false);
-    SplashScreen.hideAsync();
-  }), []);
+  const usuarioAnterior = useRef<User | null>(null);
+  const segmentoActual = useRef<string | undefined>(undefined);
+  segmentoActual.current = segments[0] as string | undefined;
+
+  // onAuthStateChange emite INITIAL_SESSION al suscribirse con la sesión guardada (o null)
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      const nuevo = session?.user ?? null;
+      const entro = !!nuevo && !usuarioAnterior.current;
+      usuarioAnterior.current = nuevo;
+
+      // Animación de entrada al abrir la app con sesión o al iniciar sesión (no durante el registro,
+      // que cierra la sesión enseguida)
+      if (entro && segmentoActual.current !== 'register' && (event !== 'INITIAL_SESSION' || !splashYaVisto())) {
+        marcarSplashVisto();
+        setSplash({ nombre: nuevo?.user_metadata?.nombres });
+      }
+
+      setUser(nuevo);
+      setInitializing(false);
+      SplashScreen.hideAsync();
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (initializing || !loaded) return;
@@ -56,20 +93,25 @@ function MainAuthGate({ loaded }: { loaded: boolean }) {
   }, [user, initializing, segments, loaded]);
 
   if (initializing || !loaded) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0b132b', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#00b4d8" />
-      </View>
-    );
+    // Mismo color que el splash nativo, para que no haya destellos
+    return <View style={{ flex: 1, backgroundColor: PALETA_OSCURA.bg }} />;
   }
 
+  const navigationTheme = esOscuro
+    ? { ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.bg, card: colors.surface, border: colors.border, primary: colors.primary, text: colors.text } }
+    : { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: colors.bg, card: colors.surface, border: colors.border, primary: colors.primary, text: colors.text } };
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(operario)" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="register" />
-      </Stack>
-    </ThemeProvider>
+    <NavigationThemeProvider value={navigationTheme}>
+      <StatusBar style={splash || esOscuro ? 'light' : 'dark'} />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+          <Stack.Screen name="(operario)" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="register" />
+        </Stack>
+        {splash && <SplashAnimation nombre={splash.nombre} onTerminar={() => setSplash(null)} />}
+      </View>
+    </NavigationThemeProvider>
   );
 }

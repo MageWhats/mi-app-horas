@@ -10,6 +10,8 @@ export interface Marca {
   latitude?: number | null;
   longitude?: number | null;
   accuracy?: number | null;
+  motivoSinGps?: string;      // Justificación cuando se registró sin ubicación
+  corteMedianoche?: boolean;  // Generada al partir un turno nocturno a las 00:00
   horaIngreso?: string;       // Solo marcas MANUAL
   horaSalida?: string;        // Solo marcas MANUAL
   totalHours?: number;        // Solo marcas MANUAL_JORNADA

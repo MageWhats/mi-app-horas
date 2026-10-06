@@ -13,12 +13,16 @@ import { ManualRegistrationModal } from "../../components/ManualRegistrationModa
 import { MonthNavigator } from "../../components/MonthNavigator";
 import { formatSeconds, RealTimePunch } from "../../components/RealTimePunch";
 import { ScreenContainer } from "../../components/ScreenContainer";
+import { ScreenHeader } from "../../components/ScreenHeader";
 import { useWorkHours } from "../../context/WorkHoursContext";
+import { alpha, Paleta, useTheme, useThemedStyles } from "../../lib/theme";
 import { calculateRealtimeHours, toLocalDateStr } from "../../lib/utils";
 import { Marca } from "../../types/hours";
 
 export default function RegisterScreen() {
   const { entries, currentDate, globalSeconds, openShift } = useWorkHours();
+  const { colors: c } = useTheme();
+  const styles = useThemedStyles(crearEstilos);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const todayStr = toLocalDateStr();
@@ -29,7 +33,7 @@ export default function RegisterScreen() {
   // 1. ANIMACIÓN DE ALTURA: Se encoge de 450px a solo 60px
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
-    outputRange: [450, 60],
+    outputRange: [430, 60],
     extrapolate: "clamp",
   });
 
@@ -76,24 +80,12 @@ export default function RegisterScreen() {
         onPress={() => setSelectedDate(dayStr)}
         activeOpacity={0.85}
         style={{
-          backgroundColor: isToday
-            ? "#1c2541"
-            : isCompletado
-              ? "#111936aa"
-              : "#111936",
+          backgroundColor: isToday ? alpha(c.primary, 0.07) : c.surface,
           borderRadius: 16,
           padding: 14,
           marginBottom: 10,
-          borderWidth: 1,
-          borderColor: isToday
-            ? "#00f5d440"
-            : isCompletado
-              ? "rgba(0, 245, 212, 0.15)"
-              : "rgba(58, 79, 124, 0.15)",
-          shadowColor: "#000",
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 2,
+          borderWidth: isToday ? 1.5 : 1,
+          borderColor: isToday ? c.primary : c.border,
         }}
       >
         {/* FILA SUPERIOR: Número de día y Estado Completado */}
@@ -110,7 +102,7 @@ export default function RegisterScreen() {
               style={{
                 fontSize: 16,
                 fontWeight: "800",
-                color: isToday ? "#00f5d4" : "#ffffff",
+                color: isToday ? c.primary : c.text,
               }}
             >
               {parseInt(dayStr.split("-")[2], 10)}
@@ -122,19 +114,19 @@ export default function RegisterScreen() {
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 4,
-                  backgroundColor: "rgba(0, 245, 212, 0.06)",
+                  backgroundColor: alpha(c.cyan, 0.06),
                   paddingHorizontal: 6,
                   paddingVertical: 2,
                   borderRadius: 6,
                   borderWidth: 1,
-                  borderColor: "rgba(0, 245, 212, 0.12)",
+                  borderColor: alpha(c.cyan, 0.12),
                 }}
               >
-                <TabBarIcon name="shield-checkmark" size={10} color="#00f5d4" />
+                <TabBarIcon name="shield-checkmark" size={10} color={c.cyan} />
                 <Text
                   style={{
                     fontSize: 9,
-                    color: "#00f5d4",
+                    color: c.cyan,
                     fontWeight: "800",
                     letterSpacing: 0.3,
                   }}
@@ -148,14 +140,14 @@ export default function RegisterScreen() {
           {dayData?.isHolidayOrSunday && (
             <View
               style={{
-                backgroundColor: "rgba(255, 0, 127, 0.08)",
+                backgroundColor: alpha(c.danger, 0.08),
                 paddingHorizontal: 6,
                 paddingVertical: 2,
                 borderRadius: 6,
               }}
             >
               <Text
-                style={{ fontSize: 9, color: "#ff007f", fontWeight: "800" }}
+                style={{ fontSize: 9, color: c.danger, fontWeight: "800" }}
               >
                 FESTIVO / DOMINICAL
               </Text>
@@ -176,7 +168,7 @@ export default function RegisterScreen() {
           <View style={{ flex: 1, gap: 4, paddingRight: 12 }}>
             {marcasDelDia.length === 0 ? (
               <Text
-                style={{ fontSize: 11, color: "#4f5d75", fontStyle: "italic" }}
+                style={{ fontSize: 11, color: c.textFaint, fontStyle: "italic" }}
               >
                 Sin marcas de tiempo real
               </Text>
@@ -210,21 +202,24 @@ export default function RegisterScreen() {
                         height: 6,
                         borderRadius: 3,
                         backgroundColor: esManual
-                          ? "#3a86ff"
+                          ? c.primary
                           : esEntrada
-                            ? "#00f5d4"
-                            : "#ff007f",
+                            ? c.success
+                            : c.danger,
                       }}
                     />
                     <Text
                       style={{
                         fontSize: 11,
-                        color: "#8d99ae",
+                        color: c.textMuted,
                         fontWeight: "600",
                         fontVariant: ["tabular-nums"],
                       }}
                     >
                       {etiquetaTipo}: {horaLimpia}
+                      {!!punch.motivoSinGps && (
+                        <Text style={{ color: c.warning, fontWeight: "800" }}> · sin GPS</Text>
+                      )}
                     </Text>
                   </View>
                 );
@@ -247,15 +242,15 @@ export default function RegisterScreen() {
                   style={{
                     // Si alguna marca tiene latitud, asumimos que fue ponchado con GPS (Color Verde/Celeste)
                     backgroundColor: marcasDelDia.some((m) => m.latitude)
-                      ? "rgba(0, 245, 212, 0.1)"
-                      : "rgba(141, 153, 174, 0.1)",
+                      ? alpha(c.cyan, 0.1)
+                      : alpha(c.textMuted, 0.1),
                     paddingHorizontal: 10,
                     paddingVertical: 12.2,
                     borderRadius: 10,
                     borderWidth: 1,
                     borderColor: marcasDelDia.some((m) => m.latitude)
-                      ? "rgba(0, 245, 212, 0.2)"
-                      : "rgba(141, 153, 174, 0.2)",
+                      ? alpha(c.cyan, 0.2)
+                      : alpha(c.textMuted, 0.2),
                     minWidth: 30,
                     alignItems: "center",
                     justifyContent: "center",
@@ -266,20 +261,20 @@ export default function RegisterScreen() {
                     size={20}
                     color={
                       marcasDelDia.some((m) => m.latitude)
-                        ? "#00f5d4"
-                        : "#8d99ae"
+                        ? c.cyan
+                        : c.textMuted
                     }
                   />
                 </View>
               )}
               <View
                 style={{
-                  backgroundColor: "rgba(0, 245, 212, 0.1)",
+                  backgroundColor: alpha(c.cyan, 0.1),
                   paddingHorizontal: 10,
                   paddingVertical: 6,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: "rgba(0, 245, 212, 0.2)",
+                  borderColor: alpha(c.cyan, 0.2),
                   minWidth: 55,
                   alignItems: "center",
                   justifyContent: "center",
@@ -292,7 +287,7 @@ export default function RegisterScreen() {
                   if (totalSegundos <= 0) {
                     // Turno abierto sin tramos cerrados todavía
                     return (
-                      <Text style={{ fontSize: 12, color: "#00f5d4", fontWeight: "800" }}>
+                      <Text style={{ fontSize: 12, color: c.cyan, fontWeight: "800" }}>
                         {openShift?.date === dayStr ? "En curso" : "—"}
                       </Text>
                     );
@@ -303,7 +298,7 @@ export default function RegisterScreen() {
                         <Text
                           style={{
                             fontSize: 14,
-                            color: "#00f5d4",
+                            color: c.cyan,
                             fontWeight: "800",
                             fontVariant: ["tabular-nums"],
                           }}
@@ -313,7 +308,7 @@ export default function RegisterScreen() {
                         <Text
                           style={{
                             fontSize: 10,
-                            color: "#8d99ae",
+                            color: c.textMuted,
                             fontWeight: "700",
                             marginTop: 1,
                             textTransform: "lowercase",
@@ -330,7 +325,7 @@ export default function RegisterScreen() {
                         <Text
                           style={{
                             fontSize: 14,
-                            color: "#00f5d4",
+                            color: c.cyan,
                             fontWeight: "800",
                             fontVariant: ["tabular-nums"],
                           }}
@@ -340,7 +335,7 @@ export default function RegisterScreen() {
                         <Text
                           style={{
                             fontSize: 10,
-                            color: "#8d99ae",
+                            color: c.textMuted,
                             fontWeight: "700",
                             marginTop: 1,
                             textTransform: "lowercase",
@@ -357,7 +352,7 @@ export default function RegisterScreen() {
                         <Text
                           style={{
                             fontSize: 14,
-                            color: "#00f5d4",
+                            color: c.cyan,
                             fontWeight: "800",
                             fontVariant: ["tabular-nums"],
                           }}
@@ -367,7 +362,7 @@ export default function RegisterScreen() {
                         <Text
                           style={{
                             fontSize: 10,
-                            color: "#8d99ae",
+                            color: c.textMuted,
                             fontWeight: "700",
                             marginTop: 1,
                             textTransform: "lowercase",
@@ -389,11 +384,11 @@ export default function RegisterScreen() {
             numberOfLines={1}
             style={{
               fontSize: 11,
-              color: "#4f5d75",
+              color: c.textFaint,
               marginTop: 8,
               fontStyle: "italic",
               borderTopWidth: 1,
-              borderTopColor: "rgba(58, 79, 124, 0.05)",
+              borderTopColor: alpha(c.borderStrong, 0.05),
               paddingTop: 4,
             }}
           >
@@ -405,16 +400,15 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0b132b" }}>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ScreenContainer>
+        <ScreenHeader />
         {/* 🧥 CONTENEDOR ANIMADO SUPERIOR: Se encoge de 450px a 60px al deslizar el dedo */}
         <Animated.View
           style={{
             height: headerHeight,
             overflow: "hidden",
-            backgroundColor: "#0b132b",
-            borderBottomWidth: 1,
-            borderBottomColor: "#1c2541",
+            backgroundColor: c.bg,
           }}
         >
           {/* VISTA A: El panel gigante con el cronómetro (Se desvanece al subir) */}
@@ -435,7 +429,7 @@ export default function RegisterScreen() {
               alignItems: "center",
               justifyContent: "space-between",
               paddingHorizontal: 16,
-              backgroundColor: "#1c2541",
+              backgroundColor: c.surface,
             }}
           >
             <View
@@ -446,18 +440,18 @@ export default function RegisterScreen() {
                   width: 8,
                   height: 8,
                   borderRadius: 4,
-                  backgroundColor: "#00f5d4",
+                  backgroundColor: c.cyan,
                 }}
               />
               <Text
-                style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}
+                style={{ color: c.text, fontSize: 13, fontWeight: "700" }}
               >
                 CRONÓMETRO EN VIVO
               </Text>
             </View>
             <Text
               style={{
-                color: "#00f5d4",
+                color: c.cyan,
                 fontSize: 18,
                 fontWeight: "800",
                 fontVariant: ["tabular-nums"],
@@ -481,27 +475,10 @@ export default function RegisterScreen() {
             { useNativeDriver: false }, // Obligatorio en false para animar la altura (height)
           )}
           ListHeaderComponent={
-            <View style={{ backgroundColor: "#0b132b", paddingTop: 12 }}>
-              {/* CABECERA PREMIUM */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  paddingBottom: 12,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 22,
-                    fontWeight: "800",
-                    color: "#ffffff",
-                    letterSpacing: -0.5,
-                  }}
-                >
-                  Inicio
-                </Text>
-              </View>
+            <View style={{ backgroundColor: c.bg, paddingTop: 12 }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: c.textFaint, letterSpacing: 1, marginTop: 4 }}>
+                MIS JORNADAS
+              </Text>
               {/* El navegador de meses va aquí arriba del primer día de la lista */}
               <MonthNavigator />
             </View>
@@ -527,31 +504,35 @@ export default function RegisterScreen() {
         activeOpacity={0.85}
         style={styles.floatingButton}
       >
-        <Text style={styles.floatingButtonText}>Registro Manual</Text>
+        <Text style={{ color: c.onPrimary, fontSize: 20, fontWeight: "700", marginTop: -2 }}>+</Text>
+        <Text style={styles.floatingButtonText}>Registro manual</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const crearEstilos = (c: Paleta) => StyleSheet.create({
   floatingButton: {
     position: "absolute",
     bottom: 24,
-    right: 24,
-    backgroundColor: "#3a86ff",
+    right: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: c.primary,
     paddingHorizontal: 20,
     paddingVertical: 14,
-    borderRadius: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
+    borderRadius: 28,
+    shadowColor: c.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
     elevation: 8,
     zIndex: 999,
   },
   floatingButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
+    color: c.onPrimary,
+    fontSize: 15,
     fontWeight: "700",
     letterSpacing: 0.3,
   },

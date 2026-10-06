@@ -2,22 +2,26 @@ import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 import { TabBarIcon } from '../../components/TabBarIcon';
 import { WorkHoursProvider } from '../../context/WorkHoursContext';
+import { useTheme } from '../../lib/theme';
 
 export default function TabLayout() {
+  const { colors: c } = useTheme();
   return (
     <WorkHoursProvider>
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: '#00b4d8',
-          tabBarInactiveTintColor: '#5c677d',
+          tabBarActiveTintColor: c.primary,
+          tabBarInactiveTintColor: c.textFaint,
+          tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
           tabBarStyle: {
-            backgroundColor: '#0b132b',
-            borderTopColor: '#1c2541',
-            height: Platform.OS === 'web' ? 90 : 64,
-            paddingBottom: Platform.OS === 'web' ? 12 : 24,
-            paddingTop: 10,
+            backgroundColor: c.tabBar,
+            borderTopColor: c.border,
+            height: Platform.OS === 'web' ? 72 : 64,
+            paddingBottom: Platform.OS === 'web' ? 10 : 24,
+            paddingTop: 8,
           },
+          sceneStyle: { backgroundColor: c.bg },
         }}>
         <Tabs.Screen
           name="index"

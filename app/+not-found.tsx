@@ -1,36 +1,17 @@
 import { Link } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Simbolo } from '../components/brand/Logo';
+import { useTheme } from '../lib/theme';
 
 export default function NotFoundScreen() {
+  const { colors: c } = useTheme();
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Esta pantalla no existe.</Text>
-      <Link href="/" style={styles.link}>
-        <Text style={styles.linkText}>Volver al inicio</Text>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: c.bg, gap: 16 }}>
+      <Simbolo size={72} />
+      <Text style={{ fontSize: 20, fontWeight: '700', color: c.text }}>Esta pantalla no existe.</Text>
+      <Link href="/" style={{ paddingVertical: 12 }}>
+        <Text style={{ fontSize: 15, fontWeight: '600', color: c.primary }}>Volver al inicio</Text>
       </Link>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    backgroundColor: '#0b132b',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  link: {
-    marginTop: 15,
-    paddingVertical: 15,
-  },
-  linkText: {
-    fontSize: 14,
-    color: '#00b4d8',
-  },
-});

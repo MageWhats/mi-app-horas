@@ -1,11 +1,10 @@
 // context/WorkHoursContext.tsx
-import { onAuthStateChanged, User } from 'firebase/auth';
-import {
-  collection, deleteField, doc, getDoc, onSnapshot, query, updateDoc, where, writeBatch,
-} from 'firebase/firestore';
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AppState } from 'react-native';
 import { exportMonthToExcel } from '../lib/excelReport';
-import { auth, db } from '../lib/firebase';
+import { GeoCoords } from '../lib/location';
+import { supabase } from '../lib/supabase';
 import {
   addDays,
   calculateHoursAndNightSplit,
@@ -14,9 +13,8 @@ import {
   getUltimaMarcaRealtime,
   startOfDay,
   toLocalDateStr,
-  toYearMonth,
 } from '../lib/utils';
-import { DayEntry, Marca, MonthlySummary } from '../types/hours';
+import { DayEntry, Marca, MonthlySummary, TipoMarca } from '../types/hours';
 
 export type ManualEntryInput =
   | { mode: 'HORARIO'; startTime: string; endTime: string }
@@ -25,12 +23,6 @@ export type ManualEntryInput =
 interface DayDetails {
   isHolidayOrSunday: boolean;
   notes: string | null;
-}
-
-export interface GeoCoords {
-  latitude: number;
-  longitude: number;
-  accuracy: number | null;
 }
 
 /** Turno en tiempo real sin SALIDA. Puede haber empezado ayer (turno nocturno). */
@@ -49,39 +41,72 @@ interface WorkHoursContextType {
   globalSeconds: number;
   goToPrevMonth: () => void;
   goToNextMonth: () => void;
-  punchInRealTime: (coords: GeoCoords | null) => Promise<'ENTRADA' | 'SALIDA'>;
+  /** Sin coordenadas es obligatorio el motivo. */
+  punchInRealTime: (coords: GeoCoords | null, motivoSinGps?: string) => Promise<'ENTRADA' | 'SALIDA'>;
+  /** Marca que se registrará al ponchar ahora. */
+  proximaMarca: 'ENTRADA' | 'SALIDA';
   addManualEntry: (date: string, input: ManualEntryInput, details: DayDetails) => Promise<void>;
   updateDayDetails: (date: string, details: DayDetails) => Promise<void>;
   deleteDayEntry: (date: string) => Promise<void>;
   exportCurrentMonth: () => Promise<void>;
 }
 
-type DayMutation = {
-  date: string;
-  mutate: (actual: DayEntry | null) => Partial<DayEntry> & { marcas: Marca[] };
-  /** Con `true` las horas se derivan de las marcas; con `false` se conservan las guardadas. */
-  recalcular?: boolean;
-};
+// ─── Filas de la base de datos ───────────────────────────────────────────────
 
-const WorkHoursContext = createContext<WorkHoursContextType | undefined>(undefined);
+interface JornadaRow {
+  fecha: string;
+  es_festivo: boolean;
+  notas: string | null;
+}
 
-const monthDocRef = (uid: string, date: string) => doc(db, 'work_months', `${uid}_${date.slice(0, 7)}`);
+interface MarcaRow {
+  id: string;
+  fecha: string;
+  tipo: TipoMarca;
+  momento: string | null;
+  hora_ingreso: string | null;
+  hora_salida: string | null;
+  horas: number | null;
+  latitud: number | null;
+  longitud: number | null;
+  precision_m: number | null;
+  zona: string | null;
+  motivo_sin_gps: string | null;
+  corte_medianoche: boolean;
+  created_at: string;
+}
 
-const formatHora = (date: Date) =>
-  date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+const MARCA_COLUMNS = 'id, fecha, tipo, momento, hora_ingreso, hora_salida, horas, latitud, longitud, precision_m, zona, motivo_sin_gps, corte_medianoche, created_at';
 
-/** Homologa un día tal como viene de Firestore al modelo de la interfaz. */
-const normalizeDay = (fecha: string, raw: any): DayEntry => ({
-  ...raw,
-  date: raw.date ?? fecha,
-  hours: Number(raw.hours ?? raw.totalHours ?? 0),
-  nightHours: Number(raw.nightHours ?? 0),
-  isHolidayOrSunday: !!raw.isHolidayOrSunday,
-  marcas: Array.isArray(raw.marcas) ? raw.marcas : [],
+const formatHora = (iso: string) =>
+  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+const toMarca = (row: MarcaRow): Marca => ({
+  id: row.id,
+  tipo: row.tipo,
+  hora: row.momento
+    ? formatHora(row.momento)
+    : row.tipo === 'MANUAL'
+      ? `${row.hora_ingreso} - ${row.hora_salida}`
+      : `${Number(row.horas)} Horas Netas`,
+  timestamp: row.momento ?? row.created_at,
+  latitude: row.latitud,
+  longitude: row.longitud,
+  accuracy: row.precision_m,
+  horaIngreso: row.hora_ingreso ?? undefined,
+  horaSalida: row.hora_salida ?? undefined,
+  totalHours: row.horas != null ? Number(row.horas) : undefined,
+  zona: row.zona ?? undefined,
+  motivoSinGps: row.motivo_sin_gps ?? undefined,
+  corteMedianoche: row.corte_medianoche,
 });
 
+/** Orden cronológico: las marcas en tiempo real por su instante, las manuales por su creación. */
+const ordenMarcas = (a: MarcaRow, b: MarcaRow) =>
+  (a.momento ?? a.created_at).localeCompare(b.momento ?? b.created_at) || a.created_at.localeCompare(b.created_at);
+
 /**
- * Recalcula las horas del día a partir de todas sus marcas:
+ * Horas del día a partir de todas sus marcas:
  * tramos en tiempo real + registros manuales por horario + jornadas directas.
  */
 const computeDayTotals = (date: string, marcas: Marca[]) => {
@@ -105,25 +130,56 @@ const computeDayTotals = (date: string, marcas: Marca[]) => {
   };
 };
 
-/** Escucha un único día en tiempo real. */
-const useDaySubscription = (user: User | null, date: string) => {
-  const [day, setDay] = useState<DayEntry | null>(null);
+/** Arma los días a partir de las filas de jornadas y marcas. */
+const buildEntries = (jornadas: JornadaRow[], marcaRows: MarcaRow[]): Record<string, DayEntry> => {
+  const marcasPorDia: Record<string, Marca[]> = {};
+  [...marcaRows].sort(ordenMarcas).forEach((row) => {
+    (marcasPorDia[row.fecha] ??= []).push(toMarca(row));
+  });
 
-  useEffect(() => {
-    setDay(null);
-    if (!user) return;
-    return onSnapshot(monthDocRef(user.uid, date), (snap) => {
-      const raw = snap.exists() ? (snap.data().dias || {})[date] : null;
-      setDay(raw ? normalizeDay(date, raw) : null);
-    }, (error) => console.error(`Error en la escucha del día ${date}:`, error));
-  }, [user, date]);
+  const detalles: Record<string, JornadaRow> = {};
+  jornadas.forEach((j) => { detalles[j.fecha] = j; });
 
-  return day;
+  const fechas = new Set([...Object.keys(marcasPorDia), ...Object.keys(detalles)]);
+  const result: Record<string, DayEntry> = {};
+
+  fechas.forEach((date) => {
+    const marcas = marcasPorDia[date] ?? [];
+    const { totalHours, nightHours } = computeDayTotals(date, marcas);
+    const detalle = detalles[date];
+    const tieneRealtime = marcas.some((m) => m.tipo === 'ENTRADA' || m.tipo === 'SALIDA');
+
+    result[date] = {
+      date,
+      hours: totalHours,
+      totalHours,
+      nightHours,
+      isHolidayOrSunday: detalle?.es_festivo ?? false,
+      notes: detalle?.notas ?? null,
+      tipoIngreso: tieneRealtime ? 'REALTIME' : marcas[0]?.tipo ?? 'MANUAL',
+      marcas,
+    };
+  });
+
+  return result;
 };
 
+const fetchRange = async (desde: string, hasta: string) => {
+  const [jornadas, marcas] = await Promise.all([
+    supabase.from('jornadas').select('fecha, es_festivo, notas').gte('fecha', desde).lte('fecha', hasta),
+    supabase.from('marcas').select(MARCA_COLUMNS).gte('fecha', desde).lte('fecha', hasta),
+  ]);
+  if (jornadas.error) throw jornadas.error;
+  if (marcas.error) throw marcas.error;
+  return buildEntries(jornadas.data as JornadaRow[], marcas.data as MarcaRow[]);
+};
+
+const WorkHoursContext = createContext<WorkHoursContextType | undefined>(undefined);
+
 export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(auth.currentUser);
+  const [user, setUser] = useState<User | null>(null);
   const [entries, setEntries] = useState<Record<string, DayEntry>>({});
+  const [recent, setRecent] = useState<Record<string, DayEntry>>({}); // ayer y hoy
   const [todayStr, setTodayStr] = useState(toLocalDateStr());
   const [currentDate, setCurrentDate] = useState<Date>(() => {
     const now = new Date();
@@ -131,21 +187,39 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
   const [loading, setLoading] = useState(true);
   const [globalSeconds, setGlobalSeconds] = useState(0);
+  const [version, setVersion] = useState(0); // incrementar fuerza una recarga
+
+  const refresh = useCallback(() => setVersion((v) => v + 1), []);
 
   // Sesión
-  useEffect(() => onAuthStateChanged(auth, (firebaseUser) => {
-    setUser(firebaseUser);
-    if (!firebaseUser) setEntries({});
-  }), []);
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (!session) {
+        setEntries({});
+        setRecent({});
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
-  // Detecta el cambio de día (medianoche) para que "hoy" no quede congelado con la app abierta
+  // Detecta el cambio de día (medianoche) y recarga al volver la app a primer plano
   useEffect(() => {
     const interval = setInterval(() => {
       const nuevo = toLocalDateStr();
       setTodayStr((prev) => (prev === nuevo ? prev : nuevo));
     }, 30_000);
-    return () => clearInterval(interval);
-  }, []);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        setTodayStr(toLocalDateStr());
+        refresh();
+      }
+    });
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [refresh]);
 
   // Días del mes que se está visualizando
   useEffect(() => {
@@ -153,34 +227,45 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setLoading(false);
       return;
     }
+    let cancelado = false;
     setLoading(true);
 
-    const q = query(
-      collection(db, 'work_months'),
-      where('userId', '==', user.uid),
-      where('yearMonth', '==', toYearMonth(currentDate))
-    );
+    const desde = toLocalDateStr(currentDate);
+    const hasta = toLocalDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
 
-    return onSnapshot(q, (snapshot) => {
-      const fetched: Record<string, DayEntry> = {};
-      snapshot.forEach((d) => {
-        const dias = d.data().dias || {};
-        Object.keys(dias).forEach((fecha) => {
-          fetched[fecha] = normalizeDay(fecha, dias[fecha]);
-        });
-      });
-      setEntries(fetched);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error en la escucha de work_months:', error);
-      setLoading(false);
-    });
-  }, [user, currentDate]);
+    fetchRange(desde, hasta)
+      .then((data) => { if (!cancelado) setEntries(data); })
+      .catch((error) => console.error('Error cargando el mes:', error))
+      .finally(() => { if (!cancelado) setLoading(false); });
 
-  // Hoy y ayer se escuchan aparte del mes visible: controlan el botón de ponchar
+    return () => { cancelado = true; };
+  }, [user, currentDate, version]);
+
+  // Ayer y hoy, independientes del mes visible: controlan el botón de ponchar
   const yesterdayStr = addDays(todayStr, -1);
-  const todayEntry = useDaySubscription(user, todayStr);
-  const yesterdayEntry = useDaySubscription(user, yesterdayStr);
+  useEffect(() => {
+    if (!user) return;
+    let cancelado = false;
+    fetchRange(yesterdayStr, todayStr)
+      .then((data) => { if (!cancelado) setRecent(data); })
+      .catch((error) => console.error('Error cargando el día actual:', error));
+    return () => { cancelado = true; };
+  }, [user, todayStr, yesterdayStr, version]);
+
+  // Sincroniza cambios hechos desde otro dispositivo del mismo operario
+  useEffect(() => {
+    if (!user) return;
+    const filtro = `user_id=eq.${user.id}`;
+    const channel = supabase
+      .channel(`horas-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'marcas', filter: filtro }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jornadas', filter: filtro }, refresh)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, refresh]);
+
+  const todayEntry = recent[todayStr] ?? null;
+  const yesterdayEntry = recent[yesterdayStr] ?? null;
 
   // Turno abierto: la última marca de hoy es ENTRADA, o hoy no hay marcas y ayer quedó una ENTRADA sin cerrar
   const openShift = useMemo<OpenShift | null>(() => {
@@ -213,145 +298,87 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const goToPrevMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const goToNextMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
-  /**
-   * Lee los días de Firestore, aplica cada mutación y guarda todo en un único batch atómico.
-   * merge: true solo toca la clave de cada día dentro del mapa `dias`.
-   */
-  const writeDays = async (mutations: DayMutation[]) => {
-    if (!user) throw new Error('No hay una sesión activa.');
-    const batch = writeBatch(db);
-
-    for (const { date, mutate, recalcular = true } of mutations) {
-      const ref = monthDocRef(user.uid, date);
-      const snap = await getDoc(ref);
-      const raw = snap.exists() ? (snap.data().dias || {})[date] : null;
-      const actual = raw ? normalizeDay(date, raw) : null;
-
-      const cambios = mutate(actual);
-      const totales = recalcular
-        ? computeDayTotals(date, cambios.marcas)
-        : { totalHours: actual?.hours ?? 0, nightHours: actual?.nightHours ?? 0 };
-
-      const dia = {
-        date,
-        isHolidayOrSunday: actual?.isHolidayOrSunday ?? false,
-        notes: actual?.notes ?? null,
-        tipoIngreso: actual?.tipoIngreso ?? cambios.marcas[0]?.tipo ?? 'MANUAL',
-        ...cambios,
-        ...totales,
-      };
-
-      batch.set(ref, {
-        userId: user.uid,
-        yearMonth: date.slice(0, 7),
-        updatedAt: new Date().toISOString(),
-        dias: { [date]: dia },
-      }, { merge: true });
-    }
-
-    await batch.commit();
-  };
-
-  const nuevaMarcaRealtime = (tipo: 'ENTRADA' | 'SALIDA', instante: Date, coords: GeoCoords | null, extra?: Partial<Marca>): Marca => ({
-    id: `${tipo.toLowerCase()}-${instante.getTime()}`,
+  const marcaRealtime = (tipo: 'ENTRADA' | 'SALIDA', fecha: string, instante: Date, coords: GeoCoords | null, motivoSinGps?: string) => ({
+    fecha,
     tipo,
-    hora: formatHora(instante),
-    latitude: coords?.latitude ?? null,
-    longitude: coords?.longitude ?? null,
-    accuracy: coords?.accuracy ?? null,
-    timestamp: instante.toISOString(),
-    ...extra,
+    momento: instante.toISOString(),
+    latitud: coords?.latitude ?? null,
+    longitud: coords?.longitude ?? null,
+    precision_m: coords?.accuracy ?? null,
+    motivo_sin_gps: coords ? null : motivoSinGps?.trim() || null,
   });
 
-  const appendMarcas = (date: string, marcas: Marca[]): DayMutation => ({
-    date,
-    mutate: (actual) => ({
-      tipoIngreso: actual?.tipoIngreso ?? 'REALTIME',
-      marcas: [...(actual?.marcas ?? []), ...marcas],
-    }),
+  const marcaCorte = (tipo: 'ENTRADA' | 'SALIDA', fecha: string, medianoche: Date) => ({
+    fecha,
+    tipo,
+    momento: medianoche.toISOString(),
+    zona: 'Corte de medianoche',
+    corte_medianoche: true,
   });
+
+  const proximaMarca = openShift ? 'SALIDA' : 'ENTRADA';
 
   /** Registra la siguiente marca (ENTRADA o SALIDA) según el turno abierto y devuelve cuál fue. */
-  const punchInRealTime = async (coords: GeoCoords | null) => {
+  const punchInRealTime = async (coords: GeoCoords | null, motivoSinGps?: string) => {
+    // La base de datos también lo exige (restricción marca_con_gps_o_motivo)
+    if (!coords && !motivoSinGps?.trim()) {
+      throw new Error('Una marca sin GPS requiere un motivo.');
+    }
+
     const now = new Date();
     const hoy = toLocalDateStr(now);
-
-    if (!openShift) {
-      await writeDays([appendMarcas(hoy, [nuevaMarcaRealtime('ENTRADA', now, coords)])]);
-      return 'ENTRADA' as const;
-    }
-
-    if (openShift.date === hoy) {
-      await writeDays([appendMarcas(hoy, [nuevaMarcaRealtime('SALIDA', now, coords)])]);
-      return 'SALIDA' as const;
-    }
+    const tipo = proximaMarca;
 
     // Turno que cruzó la medianoche: se corta a las 00:00 para que cada día lleve sus propias horas
     // (nocturnas, dominicales y festivas se liquidan según el día en que realmente se trabajaron).
-    const medianoche = startOfDay(hoy);
-    const corte = { zona: 'Corte de medianoche' };
-    await writeDays([
-      appendMarcas(openShift.date, [nuevaMarcaRealtime('SALIDA', medianoche, null, corte)]),
-      appendMarcas(hoy, [
-        nuevaMarcaRealtime('ENTRADA', medianoche, null, corte),
-        nuevaMarcaRealtime('SALIDA', now, coords),
-      ]),
-    ]);
-    return 'SALIDA' as const;
+    // Un único insert de varias filas es atómico.
+    const filas = openShift && openShift.date !== hoy
+      ? [
+        marcaCorte('SALIDA', openShift.date, startOfDay(hoy)),
+        marcaCorte('ENTRADA', hoy, startOfDay(hoy)),
+        marcaRealtime('SALIDA', hoy, now, coords, motivoSinGps),
+      ]
+      : [marcaRealtime(tipo, hoy, now, coords, motivoSinGps)];
+
+    const { error } = await supabase.from('marcas').insert(filas);
+    if (error) throw error;
+    refresh();
+    return tipo;
   };
 
   const addManualEntry = async (date: string, input: ManualEntryInput, details: DayDetails) => {
-    const ahora = new Date();
-    const marca: Marca = input.mode === 'HORARIO'
-      ? {
-        id: `manual-${ahora.getTime()}`,
-        tipo: 'MANUAL',
-        hora: `${input.startTime} - ${input.endTime}`,
-        horaIngreso: input.startTime,
-        horaSalida: input.endTime,
-        zona: 'Registro Manual',
-        timestamp: ahora.toISOString(),
-      }
-      : {
-        id: `jornada-${ahora.getTime()}`,
-        tipo: 'MANUAL_JORNADA',
-        hora: `${input.hours} Horas Netas`,
-        totalHours: input.hours,
-        zona: 'Registro Jornada Faena',
-        timestamp: ahora.toISOString(),
-      };
-
-    await writeDays([{
-      date,
-      mutate: (actual) => ({
-        ...details,
-        tipoIngreso: actual?.tipoIngreso ?? marca.tipo,
-        marcas: [...(actual?.marcas ?? []), marca],
-      }),
-    }]);
+    const { error } = await supabase.rpc('registrar_manual', {
+      p_fecha: date,
+      p_es_festivo: details.isHolidayOrSunday,
+      p_notas: details.notes,
+      p_hora_ingreso: input.mode === 'HORARIO' ? input.startTime : null,
+      p_hora_salida: input.mode === 'HORARIO' ? input.endTime : null,
+      p_horas: input.mode === 'JORNADA' ? input.hours : null,
+    });
+    if (error) throw error;
+    refresh();
   };
 
   const updateDayDetails = async (date: string, details: DayDetails) => {
-    await writeDays([{
-      date,
-      mutate: (actual) => ({ ...details, marcas: actual?.marcas ?? [] }),
-      recalcular: false,
-    }]);
+    const { error } = await supabase.from('jornadas').upsert(
+      { fecha: date, es_festivo: details.isHolidayOrSunday, notas: details.notes, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,fecha' },
+    );
+    if (error) throw error;
+    refresh();
   };
 
   const deleteDayEntry = async (date: string) => {
-    if (!user) throw new Error('No hay una sesión activa.');
-    await updateDoc(monthDocRef(user.uid, date), {
-      [`dias.${date}`]: deleteField(),
-      updatedAt: new Date().toISOString(),
-    });
+    const { error } = await supabase.rpc('eliminar_jornada', { p_fecha: date });
+    if (error) throw error;
+    refresh();
   };
 
   const exportCurrentMonth = () => exportMonthToExcel(entries, summary, currentDate);
 
   return (
     <WorkHoursContext.Provider value={{
-      user, entries, openShift, currentDate, summary, loading, globalSeconds,
+      user, entries, openShift, proximaMarca, currentDate, summary, loading, globalSeconds,
       goToPrevMonth, goToNextMonth, punchInRealTime, addManualEntry, updateDayDetails, deleteDayEntry, exportCurrentMonth,
     }}>
       {children}

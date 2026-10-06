@@ -1,16 +1,19 @@
 // app/(operario)/summary.tsx
 import { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { MonthNavigator } from '../../components/MonthNavigator';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { SummaryCard } from '../../components/SummaryCard';
 import { TabBarIcon } from '../../components/TabBarIcon';
 import { WeeklyBarChart } from '../../components/WeeklyBarChart';
 import { useWorkHours } from '../../context/WorkHoursContext';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import { mostrarAlerta } from '../../lib/alert';
+import { alpha, useTheme } from '../../lib/theme';
 
 export default function SummaryScreen() {
   const { summary, currentDate, loading, entries, exportCurrentMonth } = useWorkHours();
+  const { colors: c } = useTheme();
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
@@ -52,15 +55,13 @@ export default function SummaryScreen() {
 
   return (
     <ScreenContainer>
-      <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Resumen</Text>
-      </View>
+      <ScreenHeader title="Resumen" />
 
       <MonthNavigator />
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#00b4d8" />
+          <ActivityIndicator size="large" color={c.cyan} />
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
@@ -73,49 +74,49 @@ export default function SummaryScreen() {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: '#166534',
+              backgroundColor: c.success,
               paddingVertical: 12,
               borderRadius: 12,
               marginBottom: 16,
               gap: 8,
               borderWidth: 1,
-              borderColor: '#15803d',
+              borderColor: c.success,
               marginTop: 4, // Pequeño ajuste para despegarlo del navegador
               opacity: exporting || !hasEntries ? 0.5 : 1,
             }}
           >
             {exporting ? (
-              <ActivityIndicator color="#ffffff" />
+              <ActivityIndicator color={c.onPrimary} />
             ) : (
               <>
-                <TabBarIcon name="calendar" size={20} color="#ffffff" />
-                <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '600' }}>
+                <TabBarIcon name="calendar" size={20} color={c.onPrimary} />
+                <Text style={{ color: c.onPrimary, fontSize: 15, fontWeight: '700' }}>
                   Exportar Reporte a Excel
                 </Text>
               </>
             )}
           </TouchableOpacity>
 
-          <View style={{ backgroundColor: '#1c2541', padding: 16, borderRadius: 14, borderWidth: 1, borderColor: '#3a4f7c20', marginBottom: 12 }}>
+          <View style={{ backgroundColor: c.surface, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: alpha(c.borderStrong, 0.13), marginBottom: 12 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#8d99ae', letterSpacing: 0.5 }}>DÍAS REGISTRADOS</Text>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#00b4d8' }}>{completionPercentage}%</Text>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: c.textMuted, letterSpacing: 0.5 }}>DÍAS REGISTRADOS</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: c.cyan }}>{completionPercentage}%</Text>
             </View>
-            <View style={{ height: 8, width: '100%', backgroundColor: '#0b132b', borderRadius: 4, overflow: 'hidden' }}>
-              <View style={{ height: '100%', width: `${completionPercentage}%`, backgroundColor: '#00b4d8', borderRadius: 4 }} />
+            <View style={{ height: 8, width: '100%', backgroundColor: c.bg, borderRadius: 4, overflow: 'hidden' }}>
+              <View style={{ height: '100%', width: `${completionPercentage}%`, backgroundColor: c.cyan, borderRadius: 4 }} />
             </View>
-            <Text style={{ fontSize: 11, color: '#8d99ae', marginTop: 6 }}>
+            <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 6 }}>
               Has registrado {totalDaysRegisteredInMonth} de {totalDaysInMonth} días totales este mes.
             </Text>
           </View>
 
           {!hasEntries ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 20 }}>
-              <TabBarIcon name="calendar-outline" size={48} color="#1c2541" />
-              <Text style={{ fontSize: 15, fontWeight: '600', color: '#8d99ae', textAlign: 'center', marginBottom: 4, marginTop: 12 }}>
+              <TabBarIcon name="calendar-outline" size={48} color={c.borderStrong} />
+              <Text style={{ fontSize: 15, fontWeight: '600', color: c.textMuted, textAlign: 'center', marginBottom: 4, marginTop: 12 }}>
                 No hay registros para este mes
               </Text>
-              <Text style={{ fontSize: 13, color: '#3a4f7c', textAlign: 'center' }}>
+              <Text style={{ fontSize: 13, color: c.textFaint, textAlign: 'center' }}>
                 Ve a la pestaña Inicio para comenzar a añadir tus horas.
               </Text>
             </View>
@@ -127,13 +128,13 @@ export default function SummaryScreen() {
               {weeklyOvertimeAlerts.map(({ hours, index, limit, range }) => {
                 const extraHours = (hours - limit).toFixed(1);
                 return (
-                  <View key={index} style={{ backgroundColor: 'rgba(249, 115, 22, 0.15)', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#f9731650', marginBottom: 12, marginTop: 4 }}>
+                  <View key={index} style={{ backgroundColor: alpha(c.warning, 0.15), padding: 14, borderRadius: 14, borderWidth: 1, borderColor: alpha(c.warning, 0.31), marginBottom: 12, marginTop: 4 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 6 }}>
-                      <TabBarIcon name="alert-circle" size={16} color="#f97316" />
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#f97316', letterSpacing: 0.5 }}>ALERTA: JORNADA MÁXIMA EXCEDIDA</Text>
+                      <TabBarIcon name="alert-circle" size={16} color={c.warning} />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: c.warning, letterSpacing: 0.5 }}>ALERTA: JORNADA MÁXIMA EXCEDIDA</Text>
                     </View>
-                    <Text style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 16 }}>
-                      • En la <Text style={{ fontWeight: '700', color: '#ffffff' }}>Semana {index + 1}</Text> (días {range.from} al {range.to}) trabajaste <Text style={{ fontWeight: '700', color: '#ffffff' }}>{hours}h</Text>. Superaste el límite legal de {limit}h por ley en Colombia (<Text style={{ fontWeight: '700', color: '#f97316' }}>+{extraHours}h extra</Text>).
+                    <Text style={{ fontSize: 12, color: c.textMuted, lineHeight: 16 }}>
+                      • En la <Text style={{ fontWeight: '700', color: c.text }}>Semana {index + 1}</Text> (días {range.from} al {range.to}) trabajaste <Text style={{ fontWeight: '700', color: c.text }}>{hours}h</Text>. Superaste el límite legal de {limit}h por ley en Colombia (<Text style={{ fontWeight: '700', color: c.warning }}>+{extraHours}h extra</Text>).
                     </Text>
                   </View>
                 );
@@ -149,19 +150,3 @@ export default function SummaryScreen() {
 }
 
 // Estilos de cabecera limpia integrados abajo
-const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 4,
-    paddingBottom: 4,
-    backgroundColor: '#0b132b',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: -0.5,
-  },
-});

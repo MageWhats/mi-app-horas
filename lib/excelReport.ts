@@ -46,6 +46,7 @@ export const exportMonthToExcel = async (
     { header: 'HORAS EXTRAS (T. 7.5h)', key: 'extras', width: 22 },
     { header: '¿FESTIVO / DOMINGO?', key: 'festivo', width: 24 },
     { header: 'NOTAS / NOVEDADES', key: 'notas', width: 35 },
+    { header: 'MARCAS SIN GPS (MOTIVO)', key: 'sinGps', width: 40 },
   ];
 
   const headerRow = worksheet.getRow(1);
@@ -73,6 +74,10 @@ export const exportMonthToExcel = async (
       extras: Number(extraDiaria.toFixed(1)),
       festivo: entry.isHolidayOrSunday ? 'SÍ' : 'NO',
       notas: entry.notes || 'Sin novedades',
+      sinGps: (entry.marcas ?? [])
+        .filter((m) => m.motivoSinGps)
+        .map((m) => `${m.tipo} ${m.hora}: ${m.motivoSinGps}`)
+        .join(' | '),
     });
 
     row.height = 22;
@@ -87,15 +92,15 @@ export const exportMonthToExcel = async (
     });
   });
 
-  // --- 3. Resumen de métricas (columnas J, K, L) ---
-  worksheet.getCell('J1').value = 'MÉTRICA LABORAL';
-  worksheet.getCell('K1').value = 'VALOR';
-  worksheet.getCell('L1').value = 'DESCRIPCIÓN';
-  worksheet.getColumn('J').width = 38;
-  worksheet.getColumn('K').width = 14;
-  worksheet.getColumn('L').width = 30;
+  // --- 3. Resumen de métricas (columnas K, L, M; la J queda de separación) ---
+  worksheet.getCell('K1').value = 'MÉTRICA LABORAL';
+  worksheet.getCell('L1').value = 'VALOR';
+  worksheet.getCell('M1').value = 'DESCRIPCIÓN';
+  worksheet.getColumn('K').width = 38;
+  worksheet.getColumn('L').width = 14;
+  worksheet.getColumn('M').width = 30;
 
-  ['J1', 'K1', 'L1'].forEach((cellRef) => {
+  ['K1', 'L1', 'M1'].forEach((cellRef) => {
     const cell = worksheet.getCell(cellRef);
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
     cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -115,18 +120,18 @@ export const exportMonthToExcel = async (
 
   summaryData.forEach(([nombre, valor], idx) => {
     const fila = idx + 2;
-    worksheet.getCell(`J${fila}`).value = nombre;
-    worksheet.getCell(`K${fila}`).value = Number(valor) || 0;
+    worksheet.getCell(`K${fila}`).value = nombre;
+    worksheet.getCell(`L${fila}`).value = Number(valor) || 0;
 
     // Barra de texto proporcional a las horas ordinarias del mes (máx. 15 bloques)
     const porcentaje = Math.min(Math.round((Number(valor) / horasBaseMes) * 100), 100);
     const bloques = Math.max(0, Math.min(Math.round(porcentaje / 6.6), 15));
-    const celdaGrafico = worksheet.getCell(`L${fila}`);
+    const celdaGrafico = worksheet.getCell(`M${fila}`);
     celdaGrafico.value = porcentaje > 0 ? `${'█'.repeat(bloques)} ${porcentaje}%` : '0%';
     celdaGrafico.font = { name: 'Consolas', size: 11, bold: true, color: { argb: 'FF2563EB' } };
     celdaGrafico.alignment = { vertical: 'middle', horizontal: 'center' };
 
-    ['J', 'K', 'L'].forEach((col) => {
+    ['K', 'L', 'M'].forEach((col) => {
       const cell = worksheet.getCell(`${col}${fila}`);
       cell.border = {
         bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
@@ -134,7 +139,7 @@ export const exportMonthToExcel = async (
         left: { style: 'thin', color: { argb: 'FF94A3B8' } },
         right: { style: 'thin', color: { argb: 'FF94A3B8' } },
       };
-      if (col === 'K') cell.alignment = { horizontal: 'center' };
+      if (col === 'L') cell.alignment = { horizontal: 'center' };
     });
   });
 

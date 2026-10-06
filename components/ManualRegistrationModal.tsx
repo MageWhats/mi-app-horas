@@ -15,6 +15,7 @@ import {
 import { useWorkHours } from "../context/WorkHoursContext";
 import { mostrarAlerta } from "../lib/alert";
 import { getRecargoDominical, toLocalDateStr } from "../lib/utils";
+import { alpha, Paleta, useTheme, useThemedStyles } from "../lib/theme";
 
 interface ManualRegistrationModalProps {
   isOpen: boolean;
@@ -22,6 +23,8 @@ interface ManualRegistrationModalProps {
 }
 
 export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = ({ isOpen, onClose }) => {
+  const { colors: c } = useTheme();
+  const styles = useThemedStyles(crearEstilos);
   const { addManualEntry, currentDate } = useWorkHours();
 
   // Estados del formulario manual existentes
@@ -132,16 +135,16 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => setModoRegistro('HORARIO')}
-                style={[styles.tabBtn, { backgroundColor: modoRegistro === 'HORARIO' ? '#3a86ff' : '#111936' }]}
+                style={[styles.tabBtn, { backgroundColor: modoRegistro === 'HORARIO' ? c.primary : c.surfaceAlt }]}
               >
-                <Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>Por Horario</Text>
+                <Text style={{ color: modoRegistro === 'HORARIO' ? c.onPrimary : c.text, textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>Por Horario</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => setModoRegistro('JORNADA')}
-                style={[styles.tabBtn, { backgroundColor: modoRegistro === 'JORNADA' ? '#3a86ff' : '#111936' }]}
+                style={[styles.tabBtn, { backgroundColor: modoRegistro === 'JORNADA' ? c.primary : c.surfaceAlt }]}
               >
-                <Text style={{ color: '#ffffff', textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>Por Jornada Directa</Text>
+                <Text style={{ color: modoRegistro === 'JORNADA' ? c.onPrimary : c.text, textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>Por Jornada Directa</Text>
               </TouchableOpacity>
             </View>
 
@@ -160,7 +163,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
               ) : (
                 <View>
                   <TouchableOpacity onPress={() => setShowAndroidPicker(true)} style={styles.textInput} activeOpacity={0.7}>
-                    <Text style={{ color: selectedDay ? "#ffffff" : "#4f5d75", fontSize: 14, paddingTop: 10 }}>
+                    <Text style={{ color: selectedDay ? c.text : c.textFaint, fontSize: 14, paddingTop: 10 }}>
                       {selectedDay ? `📆 Fecha seleccionada: ${selectedDay}` : "Toca para elegir la fecha..."}
                     </Text>
                   </TouchableOpacity>
@@ -194,7 +197,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                       const input = document.getElementById("web-start-time");
                       if (input) (input as any).showPicker();
                     }}>
-                      <Text style={{ color: startHour ? "#ffffff" : "#4f5d75", fontSize: 13, paddingTop: 10, paddingHorizontal: 12 }}>
+                      <Text style={{ color: startHour ? c.text : c.textFaint, fontSize: 13, paddingTop: 10, paddingHorizontal: 12 }}>
                         {startHour ? startHour : "Elegir... "}
                       </Text>
                       <input id="web-start-time" type="time" value={startHour} onChange={(e) => setStartHour(e.target.value)} style={styles.hiddenWebTime} />
@@ -202,7 +205,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                   ) : (
                     <View>
                       <TouchableOpacity onPress={() => setShowStartPicker(true)} style={styles.textInput} activeOpacity={0.7}>
-                        <Text style={{ color: startHour ? "#ffffff" : "#4f5d75", fontSize: 13, paddingTop: 10 }}>{startHour ? startHour : "Elegir... "}</Text>
+                        <Text style={{ color: startHour ? c.text : c.textFaint, fontSize: 13, paddingTop: 10 }}>{startHour ? startHour : "Elegir... "}</Text>
                       </TouchableOpacity>
                       {showStartPicker && (
                         <DateTimePicker value={startTimeObject} mode="time" is24Hour={false} display="default" onChange={(event, date) => {
@@ -225,7 +228,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                       const input = document.getElementById("web-end-time");
                       if (input) (input as any).showPicker();
                     }}>
-                      <Text style={{ color: endHour ? "#ffffff" : "#4f5d75", fontSize: 13, paddingTop: 10, paddingHorizontal: 12 }}>
+                      <Text style={{ color: endHour ? c.text : c.textFaint, fontSize: 13, paddingTop: 10, paddingHorizontal: 12 }}>
                         {endHour ? endHour : "Elegir... "}
                       </Text>
                       <input id="web-end-time" type="time" value={endHour} onChange={(e) => setEndHour(e.target.value)} style={styles.hiddenWebTime} />
@@ -233,7 +236,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                   ) : (
                     <View>
                       <TouchableOpacity onPress={() => setShowEndPicker(true)} style={styles.textInput} activeOpacity={0.7}>
-                        <Text style={{ color: endHour ? "#ffffff" : "#4f5d75", fontSize: 13, paddingTop: 10 }}>{endHour ? endHour : "Elegir... "}</Text>
+                        <Text style={{ color: endHour ? c.text : c.textFaint, fontSize: 13, paddingTop: 10 }}>{endHour ? endHour : "Elegir... "}</Text>
                       </TouchableOpacity>
                       {showEndPicker && (
                         <DateTimePicker value={endTimeObject} mode="time" is24Hour={false} display="default" onChange={(event, date) => {
@@ -262,7 +265,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                     keyboardType="numeric"
                     style={styles.textInput}
                     placeholder="Ej: 12"
-                    placeholderTextColor="#4f5d75"
+                    placeholderTextColor={c.textFaint}
                   />
                 </View>
 
@@ -270,15 +273,15 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                   activeOpacity={0.8}
                   onPress={() => setEsFestivoJornada(!esFestivoJornada)}
                   style={{
-                    backgroundColor: esFestivoJornada ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
+                    backgroundColor: esFestivoJornada ? alpha(c.warning, 0.12) : 'transparent',
                     borderWidth: 1,
-                    borderColor: esFestivoJornada ? '#f59e0b' : '#3a4f7c40',
+                    borderColor: esFestivoJornada ? c.warning : alpha(c.borderStrong, 0.25),
                     height: 44,
                     borderRadius: 12,
                     justifyContent: 'center'
                   }}
                 >
-                  <Text style={{ color: esFestivoJornada ? '#f59e0b' : '#8d99ae', textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>
+                  <Text style={{ color: esFestivoJornada ? c.warning : c.textMuted, textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>
                     {esFestivoJornada ? `✓ JORNADA EN DOMINGO / FESTIVO (RECARGO +${getRecargoDominical(selectedDay || toLocalDateStr())}%)` : '+ ¿LA JORNADA FUE UN DOMINGO O FESTIVO?'}
                   </Text>
                 </TouchableOpacity>
@@ -291,7 +294,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
               <TextInput
                 style={[styles.textInput, { height: 70, textAlignVertical: "top", paddingTop: 8 }]}
                 placeholder="Escribe detalles de la faena o por qué reportas manual..."
-                placeholderTextColor="#4f5d75"
+                placeholderTextColor={c.textFaint}
                 multiline={true}
                 value={notes}
                 onChangeText={setNotes}
@@ -310,7 +313,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
             {/* Botón 2: Guardar */}
             <TouchableOpacity onPress={handleSaveManual} disabled={loading} style={[styles.actionBtn, styles.btnSave]}>
               {loading ? (
-                <ActivityIndicator color="#ffffff" />
+                <ActivityIndicator color={c.onPrimary} />
               ) : (
                 <Text style={styles.btnTextSave}>Guardar Registro</Text>
               )}
@@ -324,21 +327,21 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: { flex: 1, backgroundColor: "rgba(11, 19, 43, 0.85)", justifyContent: "center", alignItems: "center", padding: 20, },
-  modalContainer: { backgroundColor: "#0b132b", borderRadius: 24, padding: 20, width: "100%", maxWidth: 420, borderWidth: 1, borderColor: "#3a4f7c25", maxHeight: "90%", },
-  modalTitle: { fontSize: 18, fontWeight: "800", color: "#ffffff", textAlign: "center", },
-  modalSubtitle: { fontSize: 12, color: "#8d99ae", textAlign: "center", marginTop: 4, marginBottom: 20, },
-  inputLabel: { fontSize: 10, fontWeight: "700", color: "#8d99ae", letterSpacing: 0.5, marginBottom: 6, },
-  pickerContainer: { backgroundColor: "#111936", borderRadius: 12, borderWidth: 1, borderColor: "#3a4f7c20", overflow: "hidden", },
-  webSelect: { width: "100%", height: 44, backgroundColor: "#111936", color: "#ffffff", paddingHorizontal: 12, fontSize: 14, borderWidth: 0, },
-  textInput: { backgroundColor: "#111936", color: "#ffffff", height: 44, borderRadius: 12, paddingHorizontal: 12, fontSize: 14, borderWidth: 1, borderColor: "#3a4f7c20", },
-  tabBtn: { flex: 1, height: 38, borderRadius: 10, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#3a4f7c15" },
+const crearEstilos = (c: Paleta) => StyleSheet.create({
+  modalOverlay: { flex: 1, backgroundColor: alpha(c.bg, 0.85), justifyContent: "center", alignItems: "center", padding: 20, },
+  modalContainer: { backgroundColor: c.bg, borderRadius: 24, padding: 20, width: "100%", maxWidth: 420, borderWidth: 1, borderColor: alpha(c.borderStrong, 0.15), maxHeight: "90%", },
+  modalTitle: { fontSize: 18, fontWeight: "800", color: c.text, textAlign: "center", },
+  modalSubtitle: { fontSize: 12, color: c.textMuted, textAlign: "center", marginTop: 4, marginBottom: 20, },
+  inputLabel: { fontSize: 10, fontWeight: "700", color: c.textMuted, letterSpacing: 0.5, marginBottom: 6, },
+  pickerContainer: { backgroundColor: c.surfaceAlt, borderRadius: 12, borderWidth: 1, borderColor: alpha(c.borderStrong, 0.13), overflow: "hidden", },
+  webSelect: { width: "100%", height: 44, backgroundColor: c.surfaceAlt, color: c.text, paddingHorizontal: 12, fontSize: 14, borderWidth: 0, },
+  textInput: { backgroundColor: c.surfaceAlt, color: c.text, height: 44, borderRadius: 12, paddingHorizontal: 12, fontSize: 14, borderWidth: 1, borderColor: alpha(c.borderStrong, 0.13), },
+  tabBtn: { flex: 1, height: 38, borderRadius: 10, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: alpha(c.borderStrong, 0.08) },
   actionBtn: { flex: 1, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center", },
-  btnCancel: { backgroundColor: "#1c254140", borderWidth: 1, borderColor: "#3a4f7c20", },
-  btnSave: { backgroundColor: "#3a86ff", },
-  btnTextCancel: { color: "#8d99ae", fontWeight: "600", fontSize: 14, },
-  btnTextSave: { color: "#ffffff", fontWeight: "700", fontSize: 14, },
+  btnCancel: { backgroundColor: alpha(c.surface, 0.25), borderWidth: 1, borderColor: alpha(c.borderStrong, 0.13), },
+  btnSave: { backgroundColor: c.primary, },
+  btnTextCancel: { color: c.textMuted, fontWeight: "600", fontSize: 14, },
+  btnTextSave: { color: c.onPrimary, fontWeight: "700", fontSize: 14, },
   hiddenWebTime: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", }
 }
 );
