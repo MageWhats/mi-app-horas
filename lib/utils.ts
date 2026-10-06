@@ -45,6 +45,84 @@ export const getColombianWeeklyLimit = (dateStr: string): number => {
   return 48;
 };
 
+// ─── Festivos de Colombia (Ley 51 de 1983, "Ley Emiliani") ───────────────────
+
+/** Domingo de Pascua (algoritmo gregoriano anónimo de Meeus/Jones/Butcher). */
+const domingoDePascua = (anio: number): Date => {
+  const a = anio % 19;
+  const b = Math.floor(anio / 100);
+  const c = anio % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(anio, mes - 1, dia);
+};
+
+const sumarDias = (fecha: Date, dias: number) => new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + dias);
+
+/** Traslada la fecha al lunes siguiente si no cae en lunes (Ley Emiliani). */
+const alLunes = (fecha: Date) => sumarDias(fecha, (8 - fecha.getDay()) % 7);
+
+const cacheFestivos = new Map<number, Map<string, string>>();
+
+/** Festivos de un año: fecha AAAA-MM-DD → nombre. */
+export const festivosColombia = (anio: number): Map<string, string> => {
+  const cacheado = cacheFestivos.get(anio);
+  if (cacheado) return cacheado;
+
+  const pascua = domingoDePascua(anio);
+  const f = (mes: number, dia: number) => new Date(anio, mes - 1, dia);
+  const lista: [Date, string][] = [
+    // Fijos
+    [f(1, 1), 'Año Nuevo'],
+    [f(5, 1), 'Día del Trabajo'],
+    [f(7, 20), 'Día de la Independencia'],
+    [f(8, 7), 'Batalla de Boyacá'],
+    [f(12, 8), 'Inmaculada Concepción'],
+    [f(12, 25), 'Navidad'],
+    // Trasladables al lunes
+    [alLunes(f(1, 6)), 'Reyes Magos'],
+    [alLunes(f(3, 19)), 'San José'],
+    [alLunes(f(6, 29)), 'San Pedro y San Pablo'],
+    [alLunes(f(8, 15)), 'Asunción de la Virgen'],
+    [alLunes(f(10, 12)), 'Día de la Raza'],
+    [alLunes(f(11, 1)), 'Todos los Santos'],
+    [alLunes(f(11, 11)), 'Independencia de Cartagena'],
+    // Según la Pascua
+    [sumarDias(pascua, -3), 'Jueves Santo'],
+    [sumarDias(pascua, -2), 'Viernes Santo'],
+    [alLunes(sumarDias(pascua, 39)), 'Ascensión del Señor'],
+    [alLunes(sumarDias(pascua, 60)), 'Corpus Christi'],
+    [alLunes(sumarDias(pascua, 68)), 'Sagrado Corazón'],
+  ];
+
+  // Dos festivos pueden caer el mismo lunes (p. ej. 30 de junio de 2025): se conservan ambos nombres
+  const mapa = new Map<string, string>();
+  for (const [fecha, nombre] of lista) {
+    const clave = toLocalDateStr(fecha);
+    const previo = mapa.get(clave);
+    mapa.set(clave, previo ? `${previo} / ${nombre}` : nombre);
+  }
+  cacheFestivos.set(anio, mapa);
+  return mapa;
+};
+
+/** Nombre del festivo de la fecha, o null si no es festivo. */
+export const nombreFestivo = (dateStr: string): string | null =>
+  festivosColombia(Number(dateStr.slice(0, 4))).get(dateStr) ?? null;
+
+/** true si la fecha es domingo o festivo en Colombia: aplica recargo dominical/festivo. */
+export const esDomingoOFestivo = (dateStr: string): boolean =>
+  startOfDay(dateStr).getDay() === 0 || nombreFestivo(dateStr) !== null;
+
 const esMinutoNocturno = (minutoDelDia: number, inicioNoche: number) =>
   minutoDelDia >= inicioNoche || minutoDelDia < FIN_NOCHE;
 

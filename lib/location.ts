@@ -6,6 +6,8 @@ export interface GeoCoords {
   latitude: number;
   longitude: number;
   accuracy: number | null;
+  /** Android reporta que la ubicación viene de una app de GPS falso */
+  simulada?: boolean;
 }
 
 /** Por qué no se pudo obtener la ubicación. */
@@ -52,12 +54,12 @@ const ubicacionNativa = async (): Promise<ResultadoUbicacion> => {
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
       TIEMPO_LIMITE_MS,
     );
-    return { ok: true, coords: { latitude: loc.coords.latitude, longitude: loc.coords.longitude, accuracy: loc.coords.accuracy } };
+    return { ok: true, coords: { latitude: loc.coords.latitude, longitude: loc.coords.longitude, accuracy: loc.coords.accuracy, simulada: loc.mocked === true } };
   } catch {
     // Respaldo: última ubicación conocida, solo si es reciente y precisa
     const ultima = await Location.getLastKnownPositionAsync({ maxAge: MAX_ANTIGUEDAD_MS, requiredAccuracy: PRECISION_MINIMA_M });
     if (ultima) {
-      return { ok: true, coords: { latitude: ultima.coords.latitude, longitude: ultima.coords.longitude, accuracy: ultima.coords.accuracy } };
+      return { ok: true, coords: { latitude: ultima.coords.latitude, longitude: ultima.coords.longitude, accuracy: ultima.coords.accuracy, simulada: ultima.mocked === true } };
     }
     return { ok: false, fallo: 'TIEMPO' };
   }

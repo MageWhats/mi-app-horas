@@ -22,14 +22,28 @@
 | Tabla | Contenido |
 |---|---|
 | `profiles` | Un operario por usuario de `auth.users`. Lo crea el trigger `on_auth_user_created` con los metadatos del registro. |
-| `jornadas` | Detalle de cada día: festivo/domingo y notas. Único por operario y fecha. |
-| `marcas` | ENTRADA / SALIDA en tiempo real, registros MANUAL por horario y MANUAL_JORNADA. No se editan. |
+| `jornadas` | Notas de cada día. Único por operario y fecha. |
+| `marcas` | ENTRADA / SALIDA en tiempo real, registros MANUAL por horario y MANUAL_JORNADA. Nunca se borran. |
+| `auditoria` | Quién creó o cambió qué y cuándo (marcas, jornadas, perfiles). Solo la escriben triggers. |
 
-Las horas totales, nocturnas y extras **no se guardan**: la app las calcula a partir de las marcas
-con las reglas legales vigentes en cada fecha (`lib/utils.ts`).
+Las horas totales, nocturnas y extras **no se guardan**: la app las calcula a partir de las marcas vigentes
+con las reglas legales de cada fecha (`lib/utils.ts`). Domingos y festivos salen del calendario oficial de
+Colombia (Ley Emiliani), no los marca el operario.
+
+## Funciones que usa la app
+
+| Función | Qué hace |
+|---|---|
+| `ponchar(...)` | Registra ENTRADA o SALIDA con la **hora del servidor** (Colombia). Corta en la medianoche los turnos que empezaron el día anterior, evita marcas dobles (1 minuto) y exige motivo si no hay GPS. |
+| `registrar_manual(...)` | Horas manuales: solo de los últimos 7 días, nunca futuras, sin cruzarse con otras marcas y sin superar 24 h en el día. |
+| `anular_marca(id, motivo)` | Anula un registro manual: queda guardado y tachado, y deja de sumar. Las marcas de entrada y salida no se anulan. |
+| `email_para_login(cedula)` / `cedula_disponible(cedula)` | Login y registro por cédula sin exponer otros datos. |
 
 ## Seguridad
 
-- RLS en todas las tablas: cada operario solo ve y modifica sus propios datos.
+- RLS en todas las tablas: cada operario solo ve sus propios datos.
+- Las marcas solo se escriben mediante las funciones anteriores: la app no puede insertarlas, editarlas ni borrarlas directamente.
 - Sin sesión solo se pueden usar `email_para_login(cedula)` y `cedula_disponible(cedula)`.
 - El operario no puede modificar su perfil desde la app (solo lectura).
+- `auditoria` no es accesible desde la API: se consulta en el SQL Editor, por ejemplo
+  `select * from public.auditoria order by fecha desc limit 100;`

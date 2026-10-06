@@ -10,8 +10,9 @@ import {
   calculateHoursAndNightSplit,
   calculateMonthlySummary,
   calculateRealtimeHours,
+  esDomingoOFestivo,
   getUltimaMarcaRealtime,
-  startOfDay,
+  parseHoraAMinutos,
   toLocalDateStr,
 } from '../lib/utils';
 import { DayEntry, Marca, MonthlySummary, TipoMarca } from '../types/hours';
@@ -19,11 +20,6 @@ import { DayEntry, Marca, MonthlySummary, TipoMarca } from '../types/hours';
 export type ManualEntryInput =
   | { mode: 'HORARIO'; startTime: string; endTime: string }
   | { mode: 'JORNADA'; hours: number };
-
-interface DayDetails {
-  isHolidayOrSunday: boolean;
-  notes: string | null;
-}
 
 /** Turno en tiempo real sin SALIDA. Puede haber empezado ayer (turno nocturno). */
 export interface OpenShift {
@@ -41,13 +37,14 @@ interface WorkHoursContextType {
   globalSeconds: number;
   goToPrevMonth: () => void;
   goToNextMonth: () => void;
-  /** Sin coordenadas es obligatorio el motivo. */
+  /** La hora la pone el servidor. Sin coordenadas es obligatorio el motivo. */
   punchInRealTime: (coords: GeoCoords | null, motivoSinGps?: string) => Promise<'ENTRADA' | 'SALIDA'>;
-  /** Marca que se registrará al ponchar ahora. */
+  /** Marca que se registrará al ponchar ahora (el servidor tiene la última palabra). */
   proximaMarca: 'ENTRADA' | 'SALIDA';
-  addManualEntry: (date: string, input: ManualEntryInput, details: DayDetails) => Promise<void>;
-  updateDayDetails: (date: string, details: DayDetails) => Promise<void>;
-  deleteDayEntry: (date: string) => Promise<void>;
+  addManualEntry: (date: string, input: ManualEntryInput, notes: string | null) => Promise<void>;
+  updateNotes: (date: string, notes: string | null) => Promise<void>;
+  /** Anula un registro manual (no se borra) */
+  anularMarca: (marcaId: string, motivo: string) => Promise<void>;
   exportCurrentMonth: () => Promise<void>;
 }
 
@@ -55,7 +52,6 @@ interface WorkHoursContextType {
 
 interface JornadaRow {
   fecha: string;
-  es_festivo: boolean;
   notas: string | null;
 }
 
@@ -72,11 +68,14 @@ interface MarcaRow {
   precision_m: number | null;
   zona: string | null;
   motivo_sin_gps: string | null;
+  ubicacion_simulada: boolean;
   corte_medianoche: boolean;
+  anulada_en: string | null;
+  motivo_anulacion: string | null;
   created_at: string;
 }
 
-const MARCA_COLUMNS = 'id, fecha, tipo, momento, hora_ingreso, hora_salida, horas, latitud, longitud, precision_m, zona, motivo_sin_gps, corte_medianoche, created_at';
+const MARCA_COLUMNS = 'id, fecha, tipo, momento, hora_ingreso, hora_salida, horas, latitud, longitud, precision_m, zona, motivo_sin_gps, ubicacion_simulada, corte_medianoche, anulada_en, motivo_anulacion, created_at';
 
 const formatHora = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
@@ -98,7 +97,10 @@ const toMarca = (row: MarcaRow): Marca => ({
   totalHours: row.horas != null ? Number(row.horas) : undefined,
   zona: row.zona ?? undefined,
   motivoSinGps: row.motivo_sin_gps ?? undefined,
+  ubicacionSimulada: row.ubicacion_simulada,
   corteMedianoche: row.corte_medianoche,
+  anulada: row.anulada_en !== null,
+  motivoAnulacion: row.motivo_anulacion ?? undefined,
 });
 
 /** Orden cronológico: las marcas en tiempo real por su instante, las manuales por su creación. */
@@ -106,10 +108,11 @@ const ordenMarcas = (a: MarcaRow, b: MarcaRow) =>
   (a.momento ?? a.created_at).localeCompare(b.momento ?? b.created_at) || a.created_at.localeCompare(b.created_at);
 
 /**
- * Horas del día a partir de todas sus marcas:
+ * Horas del día a partir de sus marcas vigentes (las anuladas no suman):
  * tramos en tiempo real + registros manuales por horario + jornadas directas.
  */
-const computeDayTotals = (date: string, marcas: Marca[]) => {
+const computeDayTotals = (date: string, todas: Marca[]) => {
+  const marcas = todas.filter((m) => !m.anulada);
   const realtime = calculateRealtimeHours(marcas);
   let totalHours = realtime.totalHours;
   let nightHours = realtime.nightHours;
@@ -152,7 +155,7 @@ const buildEntries = (jornadas: JornadaRow[], marcaRows: MarcaRow[]): Record<str
       date,
       hours: totalHours,
       nightHours,
-      isHolidayOrSunday: detalle?.es_festivo ?? false,
+      isHolidayOrSunday: esDomingoOFestivo(date),
       notes: detalle?.notas ?? null,
       marcas,
     };
@@ -163,7 +166,7 @@ const buildEntries = (jornadas: JornadaRow[], marcaRows: MarcaRow[]): Record<str
 
 const fetchRange = async (desde: string, hasta: string) => {
   const [jornadas, marcas] = await Promise.all([
-    supabase.from('jornadas').select('fecha, es_festivo, notas').gte('fecha', desde).lte('fecha', hasta),
+    supabase.from('jornadas').select('fecha, notas').gte('fecha', desde).lte('fecha', hasta),
     supabase.from('marcas').select(MARCA_COLUMNS).gte('fecha', desde).lte('fecha', hasta),
   ]);
   if (jornadas.error) throw jornadas.error;
@@ -255,7 +258,7 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const filtro = `user_id=eq.${user.id}`;
     const channel = supabase
       .channel(`horas-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'marcas', filter: filtro }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marcas', filter: filtro }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jornadas', filter: filtro }, refresh)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -295,78 +298,54 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const goToPrevMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const goToNextMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
-  const marcaRealtime = (tipo: 'ENTRADA' | 'SALIDA', fecha: string, instante: Date, coords: GeoCoords | null, motivoSinGps?: string) => ({
-    fecha,
-    tipo,
-    momento: instante.toISOString(),
-    latitud: coords?.latitude ?? null,
-    longitud: coords?.longitude ?? null,
-    precision_m: coords?.accuracy ?? null,
-    motivo_sin_gps: coords ? null : motivoSinGps?.trim() || null,
-  });
-
-  const marcaCorte = (tipo: 'ENTRADA' | 'SALIDA', fecha: string, medianoche: Date) => ({
-    fecha,
-    tipo,
-    momento: medianoche.toISOString(),
-    zona: 'Corte de medianoche',
-    corte_medianoche: true,
-  });
-
   const proximaMarca = openShift ? 'SALIDA' : 'ENTRADA';
 
-  /** Registra la siguiente marca (ENTRADA o SALIDA) según el turno abierto y devuelve cuál fue. */
-  const punchInRealTime = async (coords: GeoCoords | null, motivoSinGps?: string) => {
-    // La base de datos también lo exige (restricción marca_con_gps_o_motivo)
-    if (!coords && !motivoSinGps?.trim()) {
-      throw new Error('Una marca sin GPS requiere un motivo.');
-    }
-
-    const now = new Date();
-    const hoy = toLocalDateStr(now);
-    const tipo = proximaMarca;
-
-    // Turno que cruzó la medianoche: se corta a las 00:00 para que cada día lleve sus propias horas
-    // (nocturnas, dominicales y festivas se liquidan según el día en que realmente se trabajaron).
-    // Un único insert de varias filas es atómico.
-    const filas = openShift && openShift.date !== hoy
-      ? [
-        marcaCorte('SALIDA', openShift.date, startOfDay(hoy)),
-        marcaCorte('ENTRADA', hoy, startOfDay(hoy)),
-        marcaRealtime('SALIDA', hoy, now, coords, motivoSinGps),
-      ]
-      : [marcaRealtime(tipo, hoy, now, coords, motivoSinGps)];
-
-    const { error } = await supabase.from('marcas').insert(filas);
-    if (error) throw error;
-    refresh();
-    return tipo;
+  /** "8:30 p. m." o "20:30" → "20:30" (formato que valida la base de datos) */
+  const a24h = (hora: string) => {
+    const minutos = parseHoraAMinutos(hora);
+    return `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(minutos % 60).padStart(2, '0')}`;
   };
 
-  const addManualEntry = async (date: string, input: ManualEntryInput, details: DayDetails) => {
+  /**
+   * Registra la siguiente marca. La fecha, la hora, si es ENTRADA o SALIDA y el corte de medianoche
+   * los decide el servidor (función ponchar), así que cambiar la hora del celular no tiene efecto.
+   */
+  const punchInRealTime = async (coords: GeoCoords | null, motivoSinGps?: string) => {
+    const { data, error } = await supabase.rpc('ponchar', {
+      p_latitud: coords?.latitude ?? null,
+      p_longitud: coords?.longitude ?? null,
+      p_precision: coords?.accuracy ?? null,
+      p_motivo_sin_gps: coords ? null : motivoSinGps?.trim() || null,
+      p_ubicacion_simulada: coords?.simulada ?? false,
+    });
+    refresh();
+    if (error) throw error;
+    return data as 'ENTRADA' | 'SALIDA';
+  };
+
+  const addManualEntry = async (date: string, input: ManualEntryInput, notes: string | null) => {
     const { error } = await supabase.rpc('registrar_manual', {
       p_fecha: date,
-      p_es_festivo: details.isHolidayOrSunday,
-      p_notas: details.notes,
-      p_hora_ingreso: input.mode === 'HORARIO' ? input.startTime : null,
-      p_hora_salida: input.mode === 'HORARIO' ? input.endTime : null,
+      p_notas: notes,
+      p_hora_ingreso: input.mode === 'HORARIO' ? a24h(input.startTime) : null,
+      p_hora_salida: input.mode === 'HORARIO' ? a24h(input.endTime) : null,
       p_horas: input.mode === 'JORNADA' ? input.hours : null,
     });
     if (error) throw error;
     refresh();
   };
 
-  const updateDayDetails = async (date: string, details: DayDetails) => {
+  const updateNotes = async (date: string, notes: string | null) => {
     const { error } = await supabase.from('jornadas').upsert(
-      { fecha: date, es_festivo: details.isHolidayOrSunday, notas: details.notes, updated_at: new Date().toISOString() },
+      { fecha: date, notas: notes, updated_at: new Date().toISOString() },
       { onConflict: 'user_id,fecha' },
     );
     if (error) throw error;
     refresh();
   };
 
-  const deleteDayEntry = async (date: string) => {
-    const { error } = await supabase.rpc('eliminar_jornada', { p_fecha: date });
+  const anularMarca = async (marcaId: string, motivo: string) => {
+    const { error } = await supabase.rpc('anular_marca', { p_marca_id: marcaId, p_motivo: motivo.trim() });
     if (error) throw error;
     refresh();
   };
@@ -376,7 +355,7 @@ export const WorkHoursProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   return (
     <WorkHoursContext.Provider value={{
       user, entries, openShift, proximaMarca, currentDate, summary, loading, globalSeconds,
-      goToPrevMonth, goToNextMonth, punchInRealTime, addManualEntry, updateDayDetails, deleteDayEntry, exportCurrentMonth,
+      goToPrevMonth, goToNextMonth, punchInRealTime, addManualEntry, updateNotes, anularMarca, exportCurrentMonth,
     }}>
       {children}
     </WorkHoursContext.Provider>

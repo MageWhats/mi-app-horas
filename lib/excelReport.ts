@@ -10,7 +10,7 @@ const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 /** Primera hora de ingreso y última de salida del día, sea por marcas en tiempo real o manuales. */
 const getEntradaSalida = (entry: DayEntry) => {
-  const marcas = entry.marcas ?? [];
+  const marcas = (entry.marcas ?? []).filter((m) => !m.anulada);
   const primeraEntrada = marcas.find((m) => m.tipo === 'ENTRADA' || m.tipo === 'MANUAL');
   const ultimaSalida = [...marcas].reverse().find((m) => m.tipo === 'SALIDA' || m.tipo === 'MANUAL');
 
@@ -19,6 +19,17 @@ const getEntradaSalida = (entry: DayEntry) => {
     salida: ultimaSalida?.horaSalida || (ultimaSalida?.tipo === 'SALIDA' ? ultimaSalida.hora : ''),
   };
 };
+
+/** Marcas sin GPS, con ubicación simulada o anuladas, con su motivo. */
+const observacionesAuditoria = (entry: DayEntry) =>
+  (entry.marcas ?? [])
+    .flatMap((m) => [
+      m.motivoSinGps ? `${m.tipo} ${m.hora} sin GPS: ${m.motivoSinGps}` : null,
+      m.ubicacionSimulada ? `${m.tipo} ${m.hora}: ubicación simulada` : null,
+      m.anulada ? `${m.tipo} ${m.hora} ANULADA: ${m.motivoAnulacion ?? ''}` : null,
+    ])
+    .filter(Boolean)
+    .join(' | ');
 
 /** Horas ordinarias del mes según la Ley 2101 (210 h desde julio de 2026). */
 const getHorasBaseMes = (date: Date) => {
@@ -46,7 +57,7 @@ export const exportMonthToExcel = async (
     { header: 'HORAS EXTRAS (T. 7.5h)', key: 'extras', width: 22 },
     { header: '¿FESTIVO / DOMINGO?', key: 'festivo', width: 24 },
     { header: 'NOTAS / NOVEDADES', key: 'notas', width: 35 },
-    { header: 'MARCAS SIN GPS (MOTIVO)', key: 'sinGps', width: 40 },
+    { header: 'OBSERVACIONES DE AUDITORÍA', key: 'auditoria', width: 50 },
   ];
 
   const headerRow = worksheet.getRow(1);
@@ -74,10 +85,7 @@ export const exportMonthToExcel = async (
       extras: Number(extraDiaria.toFixed(1)),
       festivo: entry.isHolidayOrSunday ? 'SÍ' : 'NO',
       notas: entry.notes || 'Sin novedades',
-      sinGps: (entry.marcas ?? [])
-        .filter((m) => m.motivoSinGps)
-        .map((m) => `${m.tipo} ${m.hora}: ${m.motivoSinGps}`)
-        .join(' | '),
+      auditoria: observacionesAuditoria(entry),
     });
 
     row.height = 22;

@@ -16,7 +16,7 @@ import { ScreenContainer } from "../../components/ScreenContainer";
 import { ScreenHeader } from "../../components/ScreenHeader";
 import { useWorkHours } from "../../context/WorkHoursContext";
 import { alpha, Paleta, useTheme, useThemedStyles } from "../../lib/theme";
-import { calculateRealtimeHours, toLocalDateStr } from "../../lib/utils";
+import { calculateRealtimeHours, nombreFestivo, startOfDay, toLocalDateStr } from "../../lib/utils";
 import { Marca } from "../../types/hours";
 
 /** Duración legible según la escala: segundos, minutos u horas con un decimal. */
@@ -78,7 +78,9 @@ export default function HomeScreen() {
     const isToday = dayStr === todayStr;
 
     const marcasDelDia: Marca[] = dayData?.marcas ?? [];
-    const isCompletado = !!(dayData?.notes || dayData?.isHolidayOrSunday);
+    // Domingo o festivo oficial (aunque el día no tenga marcas)
+    const festivo = nombreFestivo(dayStr);
+    const etiquetaRecargo = festivo ?? (startOfDay(dayStr).getDay() === 0 ? "Domingo" : null);
 
     // Horas guardadas del día; si aún no hay total, se estiman de los tramos ENTRADA → SALIDA cerrados
     const tiempoCalculado = dayData?.hours || calculateRealtimeHours(marcasDelDia).totalHours;
@@ -115,49 +117,23 @@ export default function HomeScreen() {
             >
               {parseInt(dayStr.split("-")[2], 10)}
             </Text>
-
-            {isCompletado && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  backgroundColor: alpha(c.cyan, 0.06),
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: alpha(c.cyan, 0.12),
-                }}
-              >
-                <TabBarIcon name="shield-checkmark" size={10} color={c.cyan} />
-                <Text
-                  style={{
-                    fontSize: 9,
-                    color: c.cyan,
-                    fontWeight: "800",
-                    letterSpacing: 0.3,
-                  }}
-                >
-                  COMPLETADO
-                </Text>
-              </View>
-            )}
           </View>
 
-          {dayData?.isHolidayOrSunday && (
+          {etiquetaRecargo && (
             <View
               style={{
-                backgroundColor: alpha(c.danger, 0.08),
-                paddingHorizontal: 6,
-                paddingVertical: 2,
+                backgroundColor: alpha(c.warning, 0.12),
+                paddingHorizontal: 8,
+                paddingVertical: 3,
                 borderRadius: 6,
+                maxWidth: "70%",
               }}
             >
               <Text
-                style={{ fontSize: 9, color: c.danger, fontWeight: "800" }}
+                numberOfLines={1}
+                style={{ fontSize: 10, color: c.warning, fontWeight: "800" }}
               >
-                FESTIVO / DOMINICAL
+                {etiquetaRecargo.toUpperCase()}
               </Text>
             </View>
           )}
@@ -223,9 +199,17 @@ export default function HomeScreen() {
                         fontVariant: ["tabular-nums"],
                       }}
                     >
-                      {etiquetaTipo}: {horaLimpia}
+                      <Text style={{ textDecorationLine: punch.anulada ? "line-through" : "none" }}>
+                        {etiquetaTipo}: {horaLimpia}
+                      </Text>
+                      {punch.anulada && (
+                        <Text style={{ color: c.danger, fontWeight: "800" }}> · anulada</Text>
+                      )}
                       {!!punch.motivoSinGps && (
                         <Text style={{ color: c.warning, fontWeight: "800" }}> · sin GPS</Text>
+                      )}
+                      {punch.ubicacionSimulada && (
+                        <Text style={{ color: c.warning, fontWeight: "800" }}> · GPS simulado</Text>
                       )}
                     </Text>
                   </View>

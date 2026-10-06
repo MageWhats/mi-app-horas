@@ -14,8 +14,12 @@ import {
 } from "react-native";
 import { useWorkHours } from "../context/WorkHoursContext";
 import { mostrarAlerta } from "../lib/alert";
-import { getRecargoDominical, toLocalDateStr } from "../lib/utils";
+import { mensajeDeError } from "../lib/errores";
+import { addDays, getRecargoDominical, nombreFestivo, startOfDay, toLocalDateStr } from "../lib/utils";
 import { alpha, Paleta, useTheme, useThemedStyles } from "../lib/theme";
+
+const DIAS_PERMITIDOS = 7;
+const DIAS_CORTOS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 
 interface ManualRegistrationModalProps {
   isOpen: boolean;
@@ -25,7 +29,7 @@ interface ManualRegistrationModalProps {
 export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = ({ isOpen, onClose }) => {
   const { colors: c } = useTheme();
   const styles = useThemedStyles(crearEstilos);
-  const { addManualEntry, currentDate } = useWorkHours();
+  const { addManualEntry } = useWorkHours();
 
   // Formulario
   const [selectedDay, setSelectedDay] = useState("");
@@ -45,22 +49,22 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
   // Modalidad: por horario (entrada y salida) o por jornada directa (horas netas)
   const [modoRegistro, setModoRegistro] = useState<'HORARIO' | 'JORNADA'>('HORARIO');
   const [horasJornadaDirecta, setHorasJornadaDirecta] = useState('8');
-  const [esFestivoJornada, setEsFestivoJornada] = useState(false);
 
-  // Genera la lista de días del mes actual para el selector desplegable
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysArray = Array.from({ length: totalDaysInMonth }, (_, i) => {
-    const dayNum = i + 1;
-    return `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-  });
+  // Solo se pueden registrar horas manuales de los últimos 7 días (la base de datos también lo exige)
+  const hoy = toLocalDateStr();
+  const daysArray = Array.from({ length: DIAS_PERMITIDOS + 1 }, (_, i) => addDays(hoy, -i));
+  const etiquetaDia = (fecha: string) => {
+    const d = startOfDay(fecha);
+    const base = `${DIAS_CORTOS[d.getDay()]} ${d.getDate()}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return fecha === hoy ? `${base} (hoy)` : base;
+  };
+  const festivoSeleccionado = selectedDay ? nombreFestivo(selectedDay) : null;
+  const domingoSeleccionado = selectedDay ? startOfDay(selectedDay).getDay() === 0 : false;
 
   const resetForm = () => {
     setStartHour("");
     setEndHour("");
     setHorasJornadaDirecta("8");
-    setEsFestivoJornada(false);
     setNotes("");
     setSelectedDay("");
   };
@@ -92,21 +96,19 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
 
     setLoading(true);
     try {
-      const esDomingo = new Date(selectedDay + "T00:00:00").getDay() === 0;
-      const isHolidayOrSunday = esFestivoJornada || esDomingo;
       const extra = notes.trim() ? ` ${notes.trim()}` : "";
 
       if (modoRegistro === 'HORARIO') {
         await addManualEntry(
           selectedDay,
           { mode: 'HORARIO', startTime: startHour.trim(), endTime: endHour.trim() },
-          { isHolidayOrSunday, notes: `[Ajuste Manual Horario]${extra}` },
+          `[Ajuste Manual Horario]${extra}`,
         );
       } else {
         await addManualEntry(
           selectedDay,
           { mode: 'JORNADA', hours: horasNetas },
-          { isHolidayOrSunday, notes: `[Jornada Directa: ${horasNetas}h]${extra}` },
+          `[Jornada Directa: ${horasNetas}h]${extra}`,
         );
       }
 
@@ -114,7 +116,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
       handleClose();
     } catch (error) {
       console.error("Error en guardado manual:", error);
-      mostrarAlerta("No se pudo guardar el registro manual", "Revisa tu conexión e inténtalo de nuevo.");
+      mostrarAlerta("No se pudo guardar el registro manual", mensajeDeError(error, "Revisa tu conexión e inténtalo de nuevo."));
     } finally {
       setLoading(false);
     }
@@ -150,13 +152,13 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
 
             {/* Día del mes (común a ambas modalidades) */}
             <View>
-              <Text style={styles.inputLabel}>SELECCIONA EL DÍA DEL MES</Text>
+              <Text style={styles.inputLabel}>DÍA (ÚLTIMOS {DIAS_PERMITIDOS} DÍAS)</Text>
               {Platform.OS === "web" ? (
                 <View style={styles.pickerContainer}>
                   <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} style={styles.webSelect}>
                     <option value="">-- Elige una fecha --</option>
                     {daysArray.map((date) => (
-                      <option key={date} value={date}>{date}</option>
+                      <option key={date} value={date}>{etiquetaDia(date)}</option>
                     ))}
                   </select>
                 </View>
@@ -164,7 +166,7 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                 <View>
                   <TouchableOpacity onPress={() => setShowAndroidPicker(true)} style={styles.textInput} activeOpacity={0.7}>
                     <Text style={{ color: selectedDay ? c.text : c.textFaint, fontSize: 14, paddingTop: 10 }}>
-                      {selectedDay ? `📆 Fecha seleccionada: ${selectedDay}` : "Toca para elegir la fecha..."}
+                      {selectedDay ? `📆 ${etiquetaDia(selectedDay)}` : "Toca para elegir la fecha..."}
                     </Text>
                   </TouchableOpacity>
                   {showAndroidPicker && (
@@ -172,8 +174,8 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                       value={dateObject}
                       mode="date"
                       display="default"
-                      minimumDate={new Date(year, month, 1)}
-                      maximumDate={new Date(year, month, totalDaysInMonth)}
+                      minimumDate={startOfDay(addDays(hoy, -DIAS_PERMITIDOS))}
+                      maximumDate={startOfDay(hoy)}
                       onChange={(_event, date) => {
                         setShowAndroidPicker(false);
                         if (date) {
@@ -269,22 +271,17 @@ export const ManualRegistrationModal: React.FC<ManualRegistrationModalProps> = (
                   />
                 </View>
 
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setEsFestivoJornada(!esFestivoJornada)}
-                  style={{
-                    backgroundColor: esFestivoJornada ? alpha(c.warning, 0.12) : 'transparent',
-                    borderWidth: 1,
-                    borderColor: esFestivoJornada ? c.warning : alpha(c.borderStrong, 0.25),
-                    height: 44,
-                    borderRadius: 12,
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Text style={{ color: esFestivoJornada ? c.warning : c.textMuted, textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>
-                    {esFestivoJornada ? `✓ JORNADA EN DOMINGO / FESTIVO (RECARGO +${getRecargoDominical(selectedDay || toLocalDateStr())}%)` : '+ ¿LA JORNADA FUE UN DOMINGO O FESTIVO?'}
-                  </Text>
-                </TouchableOpacity>
+
+              </View>
+            )}
+
+            {/* Recargo automático según el calendario de festivos */}
+            {(festivoSeleccionado || domingoSeleccionado) && (
+              <View style={{ padding: 12, borderRadius: 12, backgroundColor: alpha(c.warning, 0.1), borderWidth: 1, borderColor: alpha(c.warning, 0.3) }}>
+                <Text style={{ color: c.text, fontSize: 13 }}>
+                  <Text style={{ fontWeight: '700' }}>{festivoSeleccionado ? `Festivo: ${festivoSeleccionado}` : 'Domingo'}</Text>
+                  {` · aplica recargo del ${getRecargoDominical(selectedDay)}% automáticamente`}
+                </Text>
               </View>
             )}
 

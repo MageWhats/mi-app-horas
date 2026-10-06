@@ -11,9 +11,12 @@ export interface Marca {
   longitude?: number | null;
   accuracy?: number | null;
   motivoSinGps?: string;      // Justificación cuando se registró sin ubicación
+  ubicacionSimulada?: boolean; // Android reportó una app de GPS falso
   corteMedianoche?: boolean;  // Generada al partir un turno nocturno a las 00:00
-  horaIngreso?: string;       // Solo marcas MANUAL
-  horaSalida?: string;        // Solo marcas MANUAL
+  anulada?: boolean;          // Registro manual anulado: no suma horas
+  motivoAnulacion?: string;
+  horaIngreso?: string;       // Solo marcas MANUAL (HH:MM, 24 h)
+  horaSalida?: string;        // Solo marcas MANUAL (HH:MM, 24 h)
   totalHours?: number;        // Solo marcas MANUAL_JORNADA
   zona?: string;
 }
@@ -22,7 +25,7 @@ export interface DayEntry {
   date: string;               // Formato "YYYY-MM-DD"
   hours: number;              // Total de horas del día (calculado a partir de las marcas)
   nightHours: number;         // Horas dentro de la franja nocturna (21:00 - 06:00)
-  isHolidayOrSunday: boolean; // Aplica recargo dominical/festivo
+  isHolidayOrSunday: boolean; // Domingo o festivo oficial: aplica recargo (calculado, no editable)
   notes?: string | null;
   marcas?: Marca[];
 }

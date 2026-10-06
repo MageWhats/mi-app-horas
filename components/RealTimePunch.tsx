@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { useWorkHours } from '../context/WorkHoursContext';
 import { mostrarAlerta } from '../lib/alert';
+import { mensajeDeError } from '../lib/errores';
 import { FalloGps, GeoCoords, obtenerUbicacion } from '../lib/location';
 import { alpha, Paleta, useTheme, useThemedStyles } from '../lib/theme';
 import { toLocalDateStr } from '../lib/utils';
@@ -57,10 +58,15 @@ export const RealTimePunch: React.FC = () => {
     try {
       const marca = await punchInRealTime(coords, motivoSinGps);
       setFalloGps(null);
-      mostrarAlerta(`Marca de ${marca} registrada`, coords ? undefined : 'Se guardó sin GPS con el motivo indicado.');
+      const detalle = !coords
+        ? 'Se guardó sin GPS con el motivo indicado.'
+        : coords.simulada
+          ? 'Tu celular reportó una ubicación simulada: la marca quedó señalada para revisión.'
+          : undefined;
+      mostrarAlerta(`Marca de ${marca} registrada`, detalle);
     } catch (e) {
       console.error('Error en el ponchador de tiempo real:', e);
-      mostrarAlerta('No se pudo registrar la marca', 'Revisa tu conexión e inténtalo de nuevo.');
+      mostrarAlerta('No se pudo registrar la marca', mensajeDeError(e, 'Revisa tu conexión e inténtalo de nuevo.'));
     } finally {
       setGuardando(false);
     }
