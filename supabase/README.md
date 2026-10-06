@@ -138,6 +138,24 @@ Como la hora la pone el celular, la base de datos solo la acepta si es coherente
 en el Excel (`created_at` guarda la hora en que llegó al servidor). Si el servidor la rechaza, el operario ve el
 motivo en Inicio y debe hacer un registro manual.
 
+## Privacidad y eliminación de cuenta
+
+- **Autorización (Ley 1581):** el registro exige aceptar la política de privacidad (`/privacidad`) y guarda la versión y
+  la fecha en `profiles.politica_version` y `politica_aceptada_en`. Quien no haya aceptado la versión vigente
+  (`POLITICA_VERSION` en `constants/empresa.ts`) ve una ventana obligatoria al entrar a la app.
+- **Eliminar la cuenta:** Perfil → *Eliminar mi cuenta* (o la página pública `/eliminar-cuenta`). Se borran el acceso y
+  los datos personales; se conservan nombre, cédula (`cedula_retenida`) y registros de jornada por obligación laboral.
+  La cédula queda libre para volver a registrarse. Lo mismo ocurre si borras un usuario desde *Authentication → Users*.
+
+```sql
+-- Quién aceptó qué versión
+select cedula, full_name, politica_version, politica_aceptada_en from public.profiles order by politica_aceptada_en desc nulls first;
+-- Cuentas eliminadas
+select cedula_retenida, full_name, cuenta_eliminada_en from public.profiles where cuenta_eliminada_en is not null;
+```
+
+Publicación en Google Play: ver `docs/play-store.md`.
+
 ## Registro restringido
 
 Mientras `cedulas_autorizadas` esté vacía, cualquiera puede registrarse. Si tiene al menos una cédula, **solo esas**

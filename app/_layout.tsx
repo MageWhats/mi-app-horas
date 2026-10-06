@@ -67,7 +67,7 @@ function MainAuthGate() {
 
       // Animación de entrada al abrir la app con sesión o al iniciar sesión (no durante el registro,
       // que cierra la sesión enseguida)
-      if (entro && !['register', 'recuperar'].includes(segmentoActual.current ?? '') && (event !== 'INITIAL_SESSION' || !splashYaVisto())) {
+      if (entro && !['register', 'recuperar', 'privacidad', 'eliminar-cuenta'].includes(segmentoActual.current ?? '') && (event !== 'INITIAL_SESSION' || !splashYaVisto())) {
         marcarSplashVisto();
         setSplash({ nombre: nuevo?.user_metadata?.nombres });
       }
@@ -85,7 +85,7 @@ function MainAuthGate() {
     const currentSegment = segments[0] as string | undefined;
     const isInLogin = currentSegment === 'login' || currentSegment === undefined;
     // Pantallas públicas que gestionan su propia navegación al terminar
-    const isInRegister = currentSegment === 'register' || currentSegment === 'recuperar';
+    const isInRegister = ['register', 'recuperar', 'privacidad', 'eliminar-cuenta'].includes(currentSegment ?? '');
 
     if (user && isInLogin) {
       router.replace('/(operario)');
@@ -113,6 +113,8 @@ function MainAuthGate() {
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />
           <Stack.Screen name="recuperar" />
+          <Stack.Screen name="privacidad" />
+          <Stack.Screen name="eliminar-cuenta" />
         </Stack>
         {splash && <SplashAnimation nombre={splash.nombre} onTerminar={() => setSplash(null)} />}
       </View>

@@ -1,13 +1,16 @@
 // app/(operario)/profile.tsx
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { formatFechaLarga } from '../../components/form/DateField';
 import { PasswordField } from '../../components/form/FormField';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { TabBarIcon } from '../../components/TabBarIcon';
 import { ThemeToggle } from '../../components/ThemeToggle';
+import { useWorkHours } from '../../context/WorkHoursContext';
 import { confirmar, mostrarAlerta } from '../../lib/alert';
+import { mensajeDeError } from '../../lib/errores';
 import { supabase } from '../../lib/supabase';
 import { alpha, Paleta, useTheme, useThemedStyles } from '../../lib/theme';
 
@@ -37,6 +40,11 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [newPassword, setNewPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
+  const router = useRouter();
+  const { colaMarcas } = useWorkHours();
+  const [eliminando, setEliminando] = useState(false);
+  const [confirmacion, setConfirmacion] = useState('');
+  const [borrando, setBorrando] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -104,6 +112,24 @@ export default function ProfileScreen() {
       mostrarAlerta('No se pudo cerrar la sesión.');
     }
   };
+
+  const eliminarCuenta = async () => {
+    if (confirmacion.trim().toUpperCase() !== 'ELIMINAR') return;
+    setBorrando(true);
+    try {
+      const { error } = await supabase.rpc('eliminar_mi_cuenta', { p_confirmacion: 'ELIMINAR' });
+      if (error) throw error;
+      mostrarAlerta('Cuenta eliminada', 'Tus datos personales se borraron. Tus registros de jornada se conservan por obligación laboral.');
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Error al eliminar la cuenta:', error);
+      mostrarAlerta('No se pudo eliminar la cuenta', mensajeDeError(error, 'Revisa tu conexión e inténtalo de nuevo.'));
+    } finally {
+      setBorrando(false);
+    }
+  };
+
+  const pendientesSinEnviar = colaMarcas.filter((m) => m.estado === 'pendiente').length;
 
   if (loading) {
     return (
@@ -192,11 +218,69 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Privacidad */}
+        <Text style={styles.seccion}>PRIVACIDAD</Text>
+        <View style={styles.tarjeta}>
+          <TouchableOpacity onPress={() => router.push('/privacidad')} style={[styles.fila, styles.filaBorde]}>
+            <View style={styles.filaIcono}><TabBarIcon name="shield-checkmark" size={16} color={c.primary} /></View>
+            <Text style={[styles.filaEtiqueta, { flex: 1 }]}>Política de privacidad</Text>
+            <TabBarIcon name="chevron-forward" size={18} color={c.textFaint} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { setConfirmacion(''); setEliminando(true); }} style={styles.fila}>
+            <View style={[styles.filaIcono, { backgroundColor: alpha(c.danger, 0.1) }]}><TabBarIcon name="close" size={16} color={c.danger} /></View>
+            <Text style={[styles.filaEtiqueta, { flex: 1, color: c.danger }]}>Eliminar mi cuenta</Text>
+            <TabBarIcon name="chevron-forward" size={18} color={c.textFaint} />
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity onPress={handleSignOut} activeOpacity={0.8} style={styles.botonSalir}>
           <TabBarIcon name="log-out-outline" size={18} color={c.danger} />
           <Text style={styles.botonSalirTexto}>Cerrar sesión</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Confirmación de eliminación de cuenta */}
+      <Modal visible={eliminando} transparent animationType="fade" onRequestClose={() => setEliminando(false)}>
+        <View style={{ flex: 1, backgroundColor: c.overlay, justifyContent: 'center', padding: 20 }}>
+          <View style={[styles.tarjeta, { width: '100%', maxWidth: 480, alignSelf: 'center', padding: 22 }]}>
+            <Text style={{ color: c.text, fontSize: 19, fontWeight: '800' }}>Eliminar mi cuenta</Text>
+            <Text style={[styles.ayuda, { fontSize: 14, lineHeight: 20, marginTop: 10 }]}>
+              Se borrarán tu acceso (correo y contraseña), tu celular, tu dirección, tus datos de nacimiento y los de tu
+              familia. Esto no se puede deshacer.
+            </Text>
+            <Text style={[styles.ayuda, { fontSize: 14, lineHeight: 20, marginTop: 8 }]}>
+              Por obligación laboral se conservan tu nombre, tu documento y tus registros de jornada.
+            </Text>
+            {pendientesSinEnviar > 0 && (
+              <Text style={{ color: c.warning, fontSize: 13, fontWeight: '700', marginTop: 10 }}>
+                Tienes {pendientesSinEnviar} marca(s) guardadas sin conexión que aún no se han enviado: se perderán.
+              </Text>
+            )}
+            <Text style={[styles.filaEtiquetaFuerte, { marginTop: 16, marginBottom: 6, fontSize: 14 }]}>Escribe ELIMINAR para confirmar</Text>
+            <TextInput
+              value={confirmacion}
+              onChangeText={setConfirmacion}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder="ELIMINAR"
+              placeholderTextColor={c.placeholder}
+              style={{ backgroundColor: c.input, color: c.text, padding: 12, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: c.borderStrong }}
+            />
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+              <TouchableOpacity onPress={() => setEliminando(false)} disabled={borrando} style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: c.surfaceAlt, alignItems: 'center' }}>
+                <Text style={{ color: c.textMuted, fontWeight: '600' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={eliminarCuenta}
+                disabled={borrando || confirmacion.trim().toUpperCase() !== 'ELIMINAR'}
+                style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: c.danger, alignItems: 'center', opacity: borrando || confirmacion.trim().toUpperCase() !== 'ELIMINAR' ? 0.5 : 1 }}
+              >
+                {borrando ? <ActivityIndicator color={c.onPrimary} /> : <Text style={{ color: c.onPrimary, fontWeight: '700' }}>Eliminar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }

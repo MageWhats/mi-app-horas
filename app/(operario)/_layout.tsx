@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
+import { ConsentimientoPendiente } from '../../components/ConsentimientoPendiente';
 import { TabBarIcon } from '../../components/TabBarIcon';
 import { useWorkHours, WorkHoursProvider } from '../../context/WorkHoursContext';
 import { useTheme } from '../../lib/theme';
@@ -16,6 +17,8 @@ function Pestanas() {
   const { colors: c } = useTheme();
   const { esSupervisor } = useWorkHours();
   return (
+    <>
+      <ConsentimientoPendiente />
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -70,5 +73,6 @@ function Pestanas() {
           }}
         />
       </Tabs>
+    </>
   );
 }

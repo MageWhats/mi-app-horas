@@ -225,7 +225,10 @@ export default function Login() {
           </TouchableOpacity>
         </Animated.View>
 
-        <Text style={styles.pie}>{'Net&Sec Suministros · Control de Horas'}</Text>
+        <Text style={styles.pie}>
+          {'Net&Sec Suministros · Control de Horas · '}
+          <Text onPress={() => router.push('/privacidad')} style={{ color: c.primary }}>Privacidad</Text>
+        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );

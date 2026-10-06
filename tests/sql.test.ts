@@ -290,7 +290,7 @@ describe('supervisores', () => {
     await como(supervisora);
     const equipo = (await db.query<Record<string, unknown>>('select * from public.operarios_equipo()')).rows;
     expect(equipo.length).toBeGreaterThanOrEqual(4);
-    expect(Object.keys(equipo[0]).sort()).toEqual(['cedula', 'full_name', 'id']);
+    expect(Object.keys(equipo[0]).sort()).toEqual(['cedula', 'cuenta_eliminada', 'full_name', 'id']);
     // Sigue sin poder leer perfiles ajenos (dirección, familia, contacto)
     expect(await valor<number>('select count(*)::int from public.profiles')).toBe(1);
   });
@@ -298,5 +298,69 @@ describe('supervisores', () => {
   it('agregar un supervisor queda en la auditoría', async () => {
     await comoAdmin();
     expect(await valor('select registro_id from public.auditoria where tabla = $1', ['supervisores'])).toBe(supervisora);
+  });
+});
+
+describe('privacidad y eliminación de cuenta', () => {
+  let diego: string;
+
+  beforeAll(async () => {
+    await comoAdmin();
+    diego = await registrar('6006', {
+      celular: '3115550000', direccion: 'Calle 1 # 2-3', hijos: [{ id: '99', nombres: 'Niño' }], politica_version: '2026-10',
+    });
+  });
+
+  it('el registro guarda la versión de la política autorizada', async () => {
+    await comoAdmin();
+    const fila = (await db.query<{ politica_version: string; aceptada: boolean }>(
+      `select politica_version, politica_aceptada_en is not null aceptada from public.profiles where id = $1`, [diego])).rows[0];
+    expect(fila).toEqual({ politica_version: '2026-10', aceptada: true });
+  });
+
+  it('un operario existente puede aceptar la política vigente', async () => {
+    await como(ana);
+    await db.query(`select public.aceptar_politica('2026-10')`);
+    expect(await valor('select politica_version from public.profiles where id = auth.uid()')).toBe('2026-10');
+    await expect(db.query(`select public.aceptar_politica('<script>')`)).rejects.toThrow(/no válida/);
+  });
+
+  it('eliminar la cuenta exige confirmación', async () => {
+    await como(diego);
+    await expect(db.query(`select public.eliminar_mi_cuenta('si')`)).rejects.toThrow(/ELIMINAR/);
+  });
+
+  it('borra el acceso y los datos personales, pero conserva los registros de jornada', async () => {
+    await como(diego);
+    await db.query('select public.ponchar(4.6, -74.1, 8)');
+    await db.query(`select public.eliminar_mi_cuenta('ELIMINAR')`);
+
+    await comoAdmin();
+    expect(await valor<number>('select count(*)::int from auth.users where id = $1', [diego])).toBe(0);
+    const perfil = (await db.query<Record<string, unknown>>(
+      `select cedula, cedula_retenida, full_name, celular, direccion, hijos, cuenta_eliminada_en is not null eliminada
+       from public.profiles where id = $1`, [diego])).rows[0];
+    expect(perfil).toMatchObject({
+      cedula: null, cedula_retenida: '6006', full_name: 'Nombre Apellido', celular: null, direccion: null, hijos: [], eliminada: true,
+    });
+    expect(await valor<number>('select count(*)::int from public.marcas where user_id = $1', [diego])).toBe(1);
+  });
+
+  it('la cédula queda libre para registrarse de nuevo', async () => {
+    await comoAnonimo('7.7.7.7');
+    expect(await valor(`select public.estado_registro('6006')`)).toBe('disponible');
+    expect(await valor(`select public.buscar_acceso('6006')`)).toEqual({ estado: 'no_encontrado' });
+    await comoAdmin();
+    await registrar('6006', {}, 'diego.nuevo@x.com');
+  });
+
+  it('el supervisor sigue viendo las horas de la cuenta eliminada, señalada', async () => {
+    await comoAdmin();
+    const supervisora = await valor<string>('select user_id from public.supervisores limit 1');
+    await como(supervisora);
+    const eliminado = (await db.query<{ cedula: string; cuenta_eliminada: boolean }>(
+      `select cedula, cuenta_eliminada from public.operarios_equipo() where id = $1`, [diego])).rows[0];
+    expect(eliminado).toEqual({ cedula: '6006', cuenta_eliminada: true });
+    expect(await valor<number>('select count(*)::int from public.marcas where user_id = $1', [diego])).toBe(1);
   });
 });

@@ -14,6 +14,7 @@ import { Turnstile } from '../components/Turnstile';
 import {
   CIUDADES, ESTADOS_CIVILES, ESTADOS_CON_CONYUGE, GENEROS, NIVELES_ESTUDIO, TIPOS_ID, TIPOS_ID_HIJO, TIPOS_VIA, tipoIdPorEdad,
 } from '../constants/registro';
+import { POLITICA_VERSION } from '../constants/empresa';
 import { mostrarAlerta } from '../lib/alert';
 import { supabase } from '../lib/supabase';
 import { alpha, useTheme } from '../lib/theme';
@@ -71,6 +72,8 @@ export default function Register() {
   const [errores, setErrores] = useState<Errores>({});
   const { colors: c } = useTheme();
   const turnstile = useRef<TurnstileHandle>(null);
+  const [autoriza, setAutoriza] = useState(false);
+  const [errorAutoriza, setErrorAutoriza] = useState(false);
 
   const [hijos, setHijos] = useState<HijoData[]>([]);
   const [hijoModal, setHijoModal] = useState(false);
@@ -167,6 +170,10 @@ export default function Register() {
   // ─── Envío ─────────────────────────────────────────────────────────────────
 
   const finalizar = async () => {
+    if (!autoriza) {
+      setErrorAutoriza(true);
+      return;
+    }
     for (const paso of [0, 1]) {
       const e = validarPaso(paso);
       if (Object.keys(e).length > 0) {
@@ -212,6 +219,7 @@ export default function Register() {
               }
               : null,
             hijos,
+            politica_version: POLITICA_VERSION,
           },
         },
       });
@@ -483,6 +491,35 @@ export default function Register() {
               <Text style={{ color: c.primary, textAlign: 'center', fontWeight: '700' }}>+ Agregar hijo(a)</Text>
             </TouchableOpacity>
           </View>
+        )}
+
+        {/* Autorización de tratamiento de datos (Ley 1581 de 2012) */}
+        {step === PASOS.length - 1 && (
+          <TouchableOpacity
+            onPress={() => { setAutoriza((a) => !a); setErrorAutoriza(false); }}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: autoriza }}
+            activeOpacity={0.8}
+            style={{
+              flexDirection: 'row', gap: 12, padding: 14, borderRadius: 14, marginTop: 16,
+              backgroundColor: c.surface, borderWidth: 1, borderColor: errorAutoriza ? c.danger : c.border,
+            }}
+          >
+            <View style={{
+              width: 22, height: 22, borderRadius: 7, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 1,
+              borderColor: autoriza ? c.primary : c.borderStrong, backgroundColor: autoriza ? c.primary : 'transparent',
+            }}>
+              {autoriza && <TabBarIcon name="checkmark" size={14} color={c.onPrimary} />}
+            </View>
+            <Text style={{ flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 19 }}>
+              Autorizo el tratamiento de mis datos personales, de mi ubicación al marcar y, como su representante legal, de
+              los datos de mis hijos menores de edad, según la{' '}
+              <Text onPress={() => router.push('/privacidad')} style={{ color: c.primary, fontWeight: '700' }}>política de privacidad</Text>.
+            </Text>
+          </TouchableOpacity>
+        )}
+        {errorAutoriza && (
+          <Text style={{ color: c.danger, fontSize: 12, marginTop: 6 }}>Para registrarte debes aceptar la política de privacidad.</Text>
         )}
 
         {/* Verificación anti-bots (solo si está configurada) */}

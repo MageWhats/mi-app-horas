@@ -22,6 +22,7 @@ interface Operario {
   id: string;
   cedula: string;
   full_name: string;
+  cuenta_eliminada: boolean;
 }
 
 interface FilaEquipo extends Operario {
@@ -100,6 +101,7 @@ export default function EquipoScreen() {
   }, [filas, busqueda]);
 
   const enTurno = filas.filter((f) => f.enTurnoDesde).length;
+  const activos = filas.filter((f) => !f.cuenta_eliminada).length;
 
   const exportar = async () => {
     setExportando(true);
@@ -141,7 +143,7 @@ export default function EquipoScreen() {
         contentContainerStyle={{ paddingBottom: 40 }}
         ListHeaderComponent={
           <View>
-            <ScreenHeader title="Equipo" subtitle={`${filas.length} operarios · ${enTurno} en turno ahora`} />
+            <ScreenHeader title="Equipo" subtitle={`${activos} operarios · ${enTurno} en turno ahora`} />
             <MonthNavigator />
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
               <View style={{ flex: 1 }}>
@@ -160,7 +162,7 @@ export default function EquipoScreen() {
             <View style={styles.filaSuperior}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.nombre} numberOfLines={1}>{f.full_name}</Text>
-                <Text style={styles.cedula}>CC {f.cedula}</Text>
+                <Text style={styles.cedula}>CC {f.cedula}{f.cuenta_eliminada ? ' · Cuenta eliminada' : ''}</Text>
               </View>
               <View style={[styles.pildora, { backgroundColor: alpha(f.enTurnoDesde ? c.success : c.textFaint, 0.14) }]}>
                 <View style={[styles.punto, { backgroundColor: f.enTurnoDesde ? c.success : c.textFaint }]} />
