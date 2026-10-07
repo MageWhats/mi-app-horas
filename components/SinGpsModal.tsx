@@ -1,9 +1,9 @@
 // components/SinGpsModal.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator, AppState, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import { FalloGps } from '../lib/location';
+import { alConcederPermisoWeb, entornoWeb, FalloGps } from '../lib/location';
 import { TabBarIcon } from './TabBarIcon';
 import { alpha, useTheme } from '../lib/theme';
 
@@ -43,6 +43,52 @@ const EXPLICACION: Record<FalloGps, { titulo: string; detalle: string; motivo: s
   },
 };
 
+// En el navegador no se puede abrir los ajustes ni forzar la ventana de permiso: se explica cómo hacerlo
+const DETALLE_WEB: Partial<Record<FalloGps, string>> = {
+  PERMISO: 'Rechazaste el permiso de ubicación. Toca "Reintentar GPS" y elige "Permitir".',
+  PERMISO_BLOQUEADO: 'El navegador tiene bloqueada la ubicación para esta página y no volverá a preguntar por sí solo. Sigue estos pasos:',
+  SERVICIOS: 'La ubicación del celular parece estar apagada o sin señal. Sigue estos pasos:',
+};
+
+/** Pasos para activar la ubicación según el celular y el navegador. Solo aplica a la versión web. */
+const pasosWeb = (fallo: FalloGps): string[] => {
+  if (fallo !== 'PERMISO_BLOQUEADO' && fallo !== 'SERVICIOS') return [];
+  const { sistema, navegador, instalada } = entornoWeb();
+  const bloqueado = fallo === 'PERMISO_BLOQUEADO';
+
+  if (sistema === 'ios') {
+    const appEnAjustes = instalada || navegador === 'Safari' ? 'Sitios web de Safari' : navegador;
+    const pasos = [
+      'Abre Ajustes › Privacidad y seguridad › Localización y verifica que esté activada.',
+      `En esa misma lista entra a "${appEnAjustes}" y elige "Mientras se usa la app" o "Preguntar la próxima vez".`,
+    ];
+    if (bloqueado) {
+      if (instalada) pasos.push('En Ajustes › Apps › Safari › Ubicación, elige "Preguntar" o "Permitir".');
+      else if (navegador === 'Safari') pasos.push('De vuelta en Safari, toca "aA" en la barra de dirección › Configuración del sitio web › Ubicación › Permitir.');
+      else pasos.push(`En ${navegador}, revisa la configuración del sitio y permite la ubicación.`);
+    }
+    pasos.push('Regresa aquí y toca "Recargar página".');
+    return pasos;
+  }
+
+  if (sistema === 'android') {
+    const pasos: string[] = [];
+    if (!bloqueado) pasos.push('Desliza desde arriba de la pantalla y activa "Ubicación".');
+    if (bloqueado && instalada) {
+      pasos.push('Mantén presionado el ícono de la app › Información de la app › Permisos › Ubicación › Permitir.');
+    } else if (bloqueado) {
+      pasos.push('Toca el ícono a la izquierda de la dirección de la página › Permisos › Ubicación › Permitir.');
+    }
+    pasos.push(`Revisa también Ajustes del celular › Aplicaciones › ${navegador === 'el navegador' ? 'tu navegador' : navegador} › Permisos › Ubicación › "Permitir solo con la app en uso".`);
+    pasos.push('Regresa aquí y toca "Reintentar GPS" (o "Recargar página" si no funciona).');
+    return pasos;
+  }
+
+  return bloqueado
+    ? ['Haz clic en el candado o ícono a la izquierda de la dirección › Ubicación › Permitir.', 'Recarga la página y vuelve a intentarlo.']
+    : ['Activa los servicios de ubicación del equipo y vuelve a intentarlo.'];
+};
+
 interface SinGpsModalProps {
   fallo: FalloGps | null;
   tipoMarca: 'ENTRADA' | 'SALIDA';
@@ -73,9 +119,39 @@ export const SinGpsModal: React.FC<SinGpsModalProps> = ({
     }
   }, [fallo]);
 
+  // Al volver de los ajustes del celular o del navegador se reintenta solo, sin que el operario lo pida
+  const reintentoAutomatico = useRef(onReintentar);
+  reintentoAutomatico.current = () => { if (!reintentando && !guardando) onReintentar(); };
+  const requiereAjustes = fallo === 'PERMISO_BLOQUEADO' || fallo === 'SERVICIOS';
+  useEffect(() => {
+    if (!requiereAjustes) return;
+    const reintentar = () => reintentoAutomatico.current();
+
+    if (Platform.OS === 'web') {
+      const alVolver = () => { if (document.visibilityState === 'visible') reintentar(); };
+      document.addEventListener('visibilitychange', alVolver);
+      const dejarDeEscuchar = alConcederPermisoWeb(reintentar);
+      return () => {
+        document.removeEventListener('visibilitychange', alVolver);
+        dejarDeEscuchar();
+      };
+    }
+
+    let enSegundoPlano = false;
+    const sub = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active' && enSegundoPlano) reintentar();
+      enSegundoPlano = estado !== 'active';
+    });
+    return () => sub.remove();
+  }, [requiereAjustes]);
+
   if (!fallo) return null;
+  const esWeb = Platform.OS === 'web';
   const info = EXPLICACION[fallo];
-  const puedeAbrirAjustes = Platform.OS !== 'web' && (fallo === 'PERMISO_BLOQUEADO' || fallo === 'SERVICIOS');
+  const detalleFallo = (esWeb && DETALLE_WEB[fallo]) || info.detalle;
+  const pasos = esWeb ? pasosWeb(fallo) : [];
+  const puedeAbrirAjustes = !esWeb && requiereAjustes;
+  const puedeRecargar = esWeb && fallo === 'PERMISO_BLOQUEADO';
   const ocupado = reintentando || guardando;
 
   const confirmar = () => {
@@ -104,7 +180,17 @@ export const SinGpsModal: React.FC<SinGpsModalProps> = ({
             <TabBarIcon name="alert-circle" size={26} color={c.warning} />
             <Text style={{ color: c.text, fontSize: 18, fontWeight: '800', flex: 1 }}>{info.titulo}</Text>
           </View>
-          <Text style={{ color: c.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 16 }}>{info.detalle}</Text>
+          <Text style={{ color: c.textMuted, fontSize: 14, lineHeight: 20, marginBottom: pasos.length ? 10 : 16 }}>{detalleFallo}</Text>
+          {pasos.length > 0 && (
+            <View style={{ backgroundColor: c.surface, borderRadius: 12, padding: 12, gap: 8, marginBottom: 16 }}>
+              {pasos.map((paso, i) => (
+                <View key={paso} style={{ flexDirection: 'row', gap: 8 }}>
+                  <Text style={{ color: c.primary, fontSize: 13, fontWeight: '800', width: 16 }}>{i + 1}.</Text>
+                  <Text style={{ color: c.text, fontSize: 13, lineHeight: 19, flex: 1 }}>{paso}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Primero intentar solucionarlo */}
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
@@ -122,6 +208,15 @@ export const SinGpsModal: React.FC<SinGpsModalProps> = ({
                 style={{ flex: 1, backgroundColor: c.surface, padding: 13, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: alpha(c.borderStrong, 0.25) }}
               >
                 <Text style={{ color: c.text, fontWeight: '700' }}>Abrir ajustes</Text>
+              </TouchableOpacity>
+            )}
+            {puedeRecargar && (
+              <TouchableOpacity
+                onPress={() => window.location.reload()}
+                disabled={ocupado}
+                style={{ flex: 1, backgroundColor: c.surface, padding: 13, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: alpha(c.borderStrong, 0.25) }}
+              >
+                <Text style={{ color: c.text, fontWeight: '700' }}>Recargar página</Text>
               </TouchableOpacity>
             )}
           </View>
