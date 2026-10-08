@@ -51,7 +51,7 @@ const DETALLE_WEB: Partial<Record<FalloGps, string>> = {
 };
 
 /** Pasos para activar la ubicación según el celular y el navegador. Solo aplica a la versión web. */
-const pasosWeb = (fallo: FalloGps): string[] => {
+export const pasosWeb = (fallo: FalloGps): string[] => {
   if (fallo !== 'PERMISO_BLOQUEADO' && fallo !== 'SERVICIOS') return [];
   const { sistema, navegador, instalada } = entornoWeb();
   const bloqueado = fallo === 'PERMISO_BLOQUEADO';

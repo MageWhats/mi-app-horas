@@ -1,6 +1,7 @@
 // lib/location.ts
 import * as Location from 'expo-location';
-import { Platform } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 
 export interface GeoCoords {
   latitude: number;
@@ -177,4 +178,58 @@ export const obtenerUbicacion = async (): Promise<ResultadoUbicacion> => {
     console.warn('Error obteniendo la ubicación:', error);
     return { ok: false, fallo: 'NO_DISPONIBLE' };
   }
+};
+
+// ---------- Estado del permiso (sin pedirlo) ----------
+
+/** Situación del permiso de ubicación. DESCONOCIDO: el navegador no lo informa (Safari < 16). */
+export type EstadoUbicacion = 'CONCEDIDO' | 'PREGUNTAR' | 'BLOQUEADO' | 'APAGADO' | 'DESCONOCIDO';
+
+/** Consulta el permiso sin mostrar ninguna ventana al usuario. */
+export const consultarEstadoUbicacion = async (): Promise<EstadoUbicacion> => {
+  try {
+    if (Platform.OS === 'web') {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) return 'DESCONOCIDO';
+      const estado = await estadoPermisoWeb();
+      return estado === 'granted' ? 'CONCEDIDO' : estado === 'prompt' ? 'PREGUNTAR' : estado === 'denied' ? 'BLOQUEADO' : 'DESCONOCIDO';
+    }
+    const permiso = await Location.getForegroundPermissionsAsync();
+    if (permiso.status !== 'granted') return permiso.canAskAgain ? 'PREGUNTAR' : 'BLOQUEADO';
+    return (await Location.hasServicesEnabledAsync()) ? 'CONCEDIDO' : 'APAGADO';
+  } catch {
+    return 'DESCONOCIDO';
+  }
+};
+
+/** Estado del permiso, actualizado al volver a la app o cuando cambia en el navegador. */
+export const useEstadoUbicacion = () => {
+  const [estado, setEstado] = useState<EstadoUbicacion | null>(null);
+  const refrescar = useCallback(async () => setEstado(await consultarEstadoUbicacion()), []);
+
+  useEffect(() => {
+    refrescar();
+    if (Platform.OS === 'web') {
+      const alVolver = () => { if (document.visibilityState === 'visible') refrescar(); };
+      document.addEventListener('visibilitychange', alVolver);
+      let permiso: PermissionStatus | null = null;
+      let activo = true;
+      const alCambiar = () => { refrescar(); };
+      navigator.permissions?.query({ name: 'geolocation' })
+        .then((s) => {
+          if (!activo) return;
+          permiso = s;
+          s.addEventListener('change', alCambiar);
+        })
+        .catch(() => {});
+      return () => {
+        activo = false;
+        document.removeEventListener('visibilitychange', alVolver);
+        permiso?.removeEventListener('change', alCambiar);
+      };
+    }
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') refrescar(); });
+    return () => sub.remove();
+  }, [refrescar]);
+
+  return { estado, refrescar };
 };

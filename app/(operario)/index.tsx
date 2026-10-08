@@ -16,6 +16,7 @@ import { HoursInputModal } from "../../components/HoursInputModal";
 import { ManualRegistrationModal } from "../../components/ManualRegistrationModal";
 import { MonthNavigator } from "../../components/MonthNavigator";
 import { formatSeconds, RealTimePunch } from "../../components/RealTimePunch";
+import { AvisoUbicacion } from "../../components/AvisoUbicacion";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { AvisosInicio } from "../../components/AvisosInicio";
 import { ScreenHeader } from "../../components/ScreenHeader";
@@ -336,6 +337,7 @@ export default function HomeScreen() {
       <ScreenContainer>
         <ScreenHeader />
         <AvisosInicio />
+        <AvisoUbicacion />
         <View style={{ flex: 1 }}>
           <Animated.FlatList<string>
             ref={listaRef}
